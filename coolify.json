@@ -1,0 +1,148 @@
+{
+  "$schema": "https://coolify.io/schema.json",
+  "name": "Productify Pro",
+  "description": "AI-powered productivity tracking application",
+  "services": [
+    {
+      "name": "api",
+      "type": "docker",
+      "dockerfile": "apps/backend/Dockerfile",
+      "context": "apps/backend",
+      "port": 8000,
+      "domain": "api.productifypro.com",
+      "healthCheck": {
+        "path": "/health",
+        "interval": 30,
+        "timeout": 10
+      },
+      "env": [
+        {
+          "key": "DATABASE_URL",
+          "required": true,
+          "secret": true
+        },
+        {
+          "key": "JWT_SECRET_KEY",
+          "required": true,
+          "secret": true
+        },
+        {
+          "key": "STRIPE_SECRET_KEY",
+          "required": true,
+          "secret": true
+        },
+        {
+          "key": "STRIPE_WEBHOOK_SECRET",
+          "required": true,
+          "secret": true
+        },
+        {
+          "key": "OPENAI_API_KEY",
+          "required": false,
+          "secret": true
+        },
+        {
+          "key": "LICENSE_SECRET_KEY",
+          "required": true,
+          "secret": true
+        },
+        {
+          "key": "CORS_ORIGINS",
+          "default": "https://productifypro.com,https://app.productifypro.com,tauri://localhost"
+        }
+      ],
+      "resources": {
+        "cpu": "0.5",
+        "memory": "512Mi"
+      }
+    },
+    {
+      "name": "landing",
+      "type": "docker",
+      "dockerfile": "apps/landing/Dockerfile",
+      "context": "apps/landing",
+      "port": 3000,
+      "domain": "productifypro.com",
+      "env": [
+        {
+          "key": "NEXT_PUBLIC_API_URL",
+          "default": "https://api.productifypro.com"
+        },
+        {
+          "key": "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+          "required": true
+        }
+      ],
+      "resources": {
+        "cpu": "0.25",
+        "memory": "256Mi"
+      }
+    },
+    {
+      "name": "db",
+      "type": "postgres",
+      "version": "15",
+      "persistent": true,
+      "env": [
+        {
+          "key": "POSTGRES_DB",
+          "default": "productify"
+        },
+        {
+          "key": "POSTGRES_PASSWORD",
+          "required": true,
+          "secret": true
+        }
+      ],
+      "resources": {
+        "cpu": "0.5",
+        "memory": "512Mi"
+      },
+      "backup": {
+        "enabled": true,
+        "schedule": "0 2 * * *",
+        "retention": 7
+      }
+    },
+    {
+      "name": "redis",
+      "type": "redis",
+      "version": "7",
+      "persistent": true,
+      "resources": {
+        "cpu": "0.25",
+        "memory": "128Mi"
+      }
+    }
+  ],
+  "domains": [
+    {
+      "domain": "productifypro.com",
+      "service": "landing",
+      "ssl": true
+    },
+    {
+      "domain": "www.productifypro.com",
+      "redirect": "productifypro.com"
+    },
+    {
+      "domain": "api.productifypro.com",
+      "service": "api",
+      "ssl": true
+    },
+    {
+      "domain": "app.productifypro.com",
+      "service": "landing",
+      "ssl": true,
+      "note": "Web app version (future)"
+    }
+  ],
+  "secrets": [
+    "DB_PASSWORD",
+    "JWT_SECRET_KEY",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "OPENAI_API_KEY",
+    "LICENSE_SECRET_KEY"
+  ]
+}

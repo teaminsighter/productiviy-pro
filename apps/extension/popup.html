@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 360px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+      color: white;
+    }
+
+    .container {
+      padding: 20px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-text {
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .tracking-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toggle {
+      width: 44px;
+      height: 24px;
+      background: #374151;
+      border-radius: 12px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .toggle.active {
+      background: #22c55e;
+    }
+
+    .toggle::after {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      background: white;
+      border-radius: 50%;
+      top: 3px;
+      left: 3px;
+      transition: transform 0.2s;
+    }
+
+    .toggle.active::after {
+      transform: translateX(20px);
+    }
+
+    .current-activity {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+
+    .activity-label {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-bottom: 8px;
+    }
+
+    .activity-title {
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .activity-domain {
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    .activity-time {
+      font-size: 24px;
+      font-weight: 700;
+      color: #818cf8;
+      margin-top: 12px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-top: 4px;
+    }
+
+    .top-sites {
+      margin-bottom: 20px;
+    }
+
+    .section-title {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .site-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .site-item:last-child {
+      border-bottom: none;
+    }
+
+    .site-name {
+      font-size: 13px;
+    }
+
+    .site-time {
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .login-form {
+      display: none;
+    }
+
+    .login-form.show {
+      display: block;
+    }
+
+    .input {
+      width: 100%;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+
+    .input::placeholder {
+      color: #6b7280;
+    }
+
+    .input:focus {
+      outline: none;
+      border-color: #6366f1;
+    }
+
+    .error {
+      color: #ef4444;
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+
+    .not-tracking {
+      text-align: center;
+      padding: 40px 20px;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+          </svg>
+        </div>
+        <span class="logo-text">Productify Pro</span>
+      </div>
+      <div class="tracking-toggle">
+        <span style="font-size: 12px; color: #9ca3af;">Tracking</span>
+        <div class="toggle active" id="trackingToggle"></div>
+      </div>
+    </div>
+
+    <div id="mainContent">
+      <div class="current-activity">
+        <div class="activity-label">Currently Tracking</div>
+        <div class="activity-title" id="activityTitle">Loading...</div>
+        <div class="activity-domain" id="activityDomain">-</div>
+        <div class="activity-time" id="activityTime">00:00</div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="totalTime">0h</div>
+          <div class="stat-label">Today</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="topCategory">-</div>
+          <div class="stat-label">Top Category</div>
+        </div>
+      </div>
+
+      <div class="top-sites">
+        <div class="section-title">Top Sites Today</div>
+        <div id="topSitesList">
+          <div class="site-item">
+            <span class="site-name">Loading...</span>
+            <span class="site-time">-</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="openDashboard">Open Dashboard</button>
+        <button class="btn btn-secondary" id="settingsBtn">Settings</button>
+      </div>
+    </div>
+
+    <div class="login-form" id="loginForm">
+      <div class="section-title">Sign in to sync your data</div>
+      <input type="email" class="input" id="email" placeholder="Email">
+      <input type="password" class="input" id="password" placeholder="Password">
+      <div class="error" id="loginError"></div>
+      <button class="btn btn-primary" id="loginBtn" style="width: 100%;">Sign In</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

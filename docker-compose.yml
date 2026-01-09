@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # ===================
+  # PostgreSQL Database
+  # ===================
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_DB: productify
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - productify-network
+
+  # ===================
+  # FastAPI Backend
+  # ===================
+  api:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:${DB_PASSWORD:-changeme}@db:5432/productify
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_PRICE_PERSONAL_MONTHLY=${STRIPE_PRICE_PERSONAL_MONTHLY}
+      - STRIPE_PRICE_PERSONAL_YEARLY=${STRIPE_PRICE_PERSONAL_YEARLY}
+      - STRIPE_PRICE_PRO_MONTHLY=${STRIPE_PRICE_PRO_MONTHLY}
+      - STRIPE_PRICE_PRO_YEARLY=${STRIPE_PRICE_PRO_YEARLY}
+      - STRIPE_PRICE_TEAM_MONTHLY=${STRIPE_PRICE_TEAM_MONTHLY}
+      - STRIPE_PRICE_TEAM_YEARLY=${STRIPE_PRICE_TEAM_YEARLY}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LICENSE_SECRET_KEY=${LICENSE_SECRET_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://productifypro.com,https://app.productifypro.com}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - productify-network
+
+  # ===================
+  # Landing Page (Next.js)
+  # ===================
+  landing:
+    build:
+      context: ./apps/landing
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://api.productifypro.com}
+      - NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}
+    ports:
+      - "3000:3000"
+    networks:
+      - productify-network
+
+  # ===================
+  # Redis Cache (optional)
+  # ===================
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - productify-network
+
+networks:
+  productify-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
