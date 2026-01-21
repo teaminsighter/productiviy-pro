@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Download as DownloadIcon, Apple, Monitor, Chrome, ArrowRight, ExternalLink } from 'lucide-react';
 
-// GitHub releases base URL
-const GITHUB_RELEASES_URL = 'https://github.com/productifypro/productify-pro/releases';
+// GitHub releases base URL - Update this to your actual repo
+const GITHUB_RELEASES_URL = 'https://github.com/teaminsighter/productiviy-pro/releases';
 const CHROME_WEBSTORE_URL = 'https://chrome.google.com/webstore/detail/productify-pro';
 
 type Platform = 'windows' | 'macos' | 'chrome' | 'unknown';
