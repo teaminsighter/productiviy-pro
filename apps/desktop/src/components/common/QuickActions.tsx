@@ -33,7 +33,8 @@ export function QuickActions() {
   // Download report mutation
   const downloadReportMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch('http://localhost:8000/api/reports/daily');
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiUrl}/api/reports/daily`);
       if (!response.ok) throw new Error('Failed to download report');
       const blob = await response.blob();
       // Create download link

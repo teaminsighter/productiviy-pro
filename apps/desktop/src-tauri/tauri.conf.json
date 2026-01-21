@@ -82,7 +82,7 @@
       "active": true,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDBBRkY2QkVCMzBENkQwMkEKUldRcTBOWXc2MnYvQ3A4OVhzWEdWSndoSUN2Yk9FSzhhN0NxcHJRTGxvQ1FmakdSSmo5aVpCcXAK",
       "endpoints": [
-        "https://github.com/YOUR_USERNAME/productify-pro/releases/latest/download/latest.json"
+        "https://github.com/teaminsighter/productiviy-pro/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

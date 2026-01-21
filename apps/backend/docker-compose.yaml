@@ -9,42 +9,43 @@ services:
     restart: unless-stopped
     expose:
       - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       # App Settings
       - DEBUG=${DEBUG:-false}
       - APP_ENV=${APP_ENV:-production}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      
-      # Database (Supabase PostgreSQL)
-      - USE_SQLITE=${USE_SQLITE:-false}
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_KEY=${SUPABASE_KEY}
-      - SUPABASE_DB_URL=${SUPABASE_DB_URL}
-      
+
+      # Database - Use local PostgreSQL
+      - USE_SQLITE=false
+      - DATABASE_URL=postgresql+asyncpg://productify:${POSTGRES_PASSWORD:-productify_secure_2024}@postgres:5432/productify
+
       # Authentication
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      
+
       # Firebase Storage
       - FIREBASE_CREDENTIALS_PATH=/app/firebase-credentials.json
       - FIREBASE_STORAGE_BUCKET=${FIREBASE_STORAGE_BUCKET}
-      
+
       # AI & Integrations
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
-      
+
       # Email
       - RESEND_API_KEY=${RESEND_API_KEY}
       - FROM_EMAIL=${FROM_EMAIL:-noreply@productifypro.insighter.digital}
       - FRONTEND_URL=${FRONTEND_URL:-http://productifypro.insighter.digital}
-      
+
       # CORS - Allow desktop app and web
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:1420,https://productifypro.insighter.digital,tauri://localhost}
-      
+
       # Sentry Error Tracking
       - SENTRY_DSN=${SENTRY_DSN}
-      
+
       # Screenshots (server-side disabled for cloud deployment)
       - SCREENSHOTS_ENABLED=${SCREENSHOTS_ENABLED:-false}
     volumes:
@@ -57,8 +58,27 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=productify
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-productify_secure_2024}
+      - POSTGRES_DB=productify
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U productify -d productify"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
       start_period: 10s
 
 volumes:
   productify_data:
+    driver: local
+  postgres_data:
     driver: local

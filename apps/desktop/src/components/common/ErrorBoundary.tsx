@@ -65,7 +65,8 @@ export class ErrorBoundary extends Component<Props, State> {
 
   private async logErrorToBackend(error: Error, errorInfo: ErrorInfo, boundaryName: string) {
     try {
-      await fetch('http://localhost:8000/api/errors/log', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      await fetch(`${apiUrl}/api/errors/log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

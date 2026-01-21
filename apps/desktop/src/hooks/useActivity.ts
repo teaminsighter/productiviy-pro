@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
-// API base URL
-const API_URL = 'http://localhost:8000/api';
+// API base URL - use environment variable
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api';
 
 export interface Activity {
   id: string;

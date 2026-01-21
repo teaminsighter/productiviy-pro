@@ -165,8 +165,9 @@ function LiveTranscriptionTab({ onAnalyze }: { onAnalyze: () => void }) {
   }, []);
 
   const connectWebSocket = useCallback(() => {
-    // Connect to WebSocket
-    const wsUrl = `ws://localhost:8000/ws/transcribe`;
+    // Connect to WebSocket - derive from API URL
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const wsUrl = apiUrl.replace(/^http/, 'ws') + '/ws/transcribe';
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 

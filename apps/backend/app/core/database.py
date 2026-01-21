@@ -10,11 +10,18 @@ import uuid
 from app.core.config import settings
 
 # Database URL configuration
-# Priority: USE_SQLITE=true > SUPABASE_DB_URL > DATABASE_URL env var > SQLite fallback
+# Priority: USE_SQLITE=true > DATABASE_URL > SUPABASE_DB_URL > SQLite fallback
 if settings.use_sqlite or os.getenv("USE_SQLITE", "false").lower() == "true":
     # Local development: Use SQLite
     DATABASE_URL = f"sqlite+aiosqlite:///{settings.database_path}"
     USE_CLOUD_DB = False
+elif settings.database_url or os.getenv("DATABASE_URL"):
+    # Use DATABASE_URL if provided (for self-hosted PostgreSQL)
+    DATABASE_URL = settings.database_url or os.getenv("DATABASE_URL", "")
+    # Ensure async driver is used
+    if DATABASE_URL.startswith("postgresql://"):
+        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+    USE_CLOUD_DB = True
 elif settings.supabase_db_url:
     # Production: Use Supabase PostgreSQL
     DATABASE_URL = settings.supabase_db_url
@@ -22,9 +29,6 @@ elif settings.supabase_db_url:
     if DATABASE_URL.startswith("postgresql://"):
         DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
     USE_CLOUD_DB = True
-elif settings.database_url:
-    DATABASE_URL = settings.database_url
-    USE_CLOUD_DB = not settings.database_url.startswith("sqlite")
 else:
     # Default to SQLite if nothing is configured
     DATABASE_URL = f"sqlite+aiosqlite:///{settings.database_path}"

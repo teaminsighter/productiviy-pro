@@ -223,7 +223,8 @@ export function useExtensionStatus() {
     const checkExtension = async () => {
       try {
         // Check if extension has synced recently
-        const response = await fetch('http://localhost:8000/api/activities/extension/stats');
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        const response = await fetch(`${apiUrl}/api/activities/extension/stats`);
         if (response.ok) {
           const data = await response.json();
           // If we have browser activities, extension is working

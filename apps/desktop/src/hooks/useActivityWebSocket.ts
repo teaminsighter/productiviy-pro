@@ -3,7 +3,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useActivityStore } from '@/stores/activityStore';
 import { activityKeys } from './useActivities';
 
-const WS_URL = 'ws://localhost:8000/ws/activities';
+// Derive WebSocket URL from API URL
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const WS_URL = API_URL.replace(/^http/, 'ws') + '/ws/activities';
 const RECONNECT_DELAY = 3000;
 const MAX_RECONNECT_ATTEMPTS = 10;
 
