@@ -143,16 +143,24 @@ export function ProfileStep({ value, onChange, onNext }: ProfileStepProps) {
         })}
       </motion.div>
 
-      {/* Continue Button */}
+      {/* Continue Button - Glass green 3D button */}
       <motion.button
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.6 }}
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
+        whileHover={{ scale: 1.02, y: -3 }}
+        whileTap={{ scale: 0.98, y: 0 }}
         onClick={onNext}
         disabled={!value}
-        className="px-8 py-3 rounded-xl bg-gradient-to-r from-accent to-purple-500 text-white font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+        className="px-10 py-4 rounded-2xl text-white font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{
+          background: value ? 'rgba(16, 185, 129, 0.85)' : 'rgba(16, 185, 129, 0.4)',
+          backdropFilter: 'blur(12px)',
+          boxShadow: value
+            ? '0 8px 32px rgba(16, 185, 129, 0.35), 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.2), inset 0 -2px 4px rgba(0, 0, 0, 0.15)'
+            : 'none',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+        }}
       >
         Continue
       </motion.button>

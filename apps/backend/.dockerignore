@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+ENV/
+env/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+test-results/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Env files (use Coolify env vars instead)
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Local data
+data/
+screenshots/
+
+# Documentation
+*.md
+docs/

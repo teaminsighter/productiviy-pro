@@ -106,5 +106,6 @@ export async function cleanupScreenshots(
 
 // Get image URL for display
 export function getScreenshotImageUrl(id: string, thumbnail: boolean = false): string {
-  return `http://localhost:8000/api/screenshots/${id}/image?thumbnail=${thumbnail}`;
+  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  return `${baseUrl}/api/screenshots/${id}/image?thumbnail=${thumbnail}`;
 }

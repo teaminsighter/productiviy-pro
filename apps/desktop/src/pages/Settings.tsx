@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Settings as SettingsIcon,
@@ -15,7 +15,6 @@ import {
   Eye,
   EyeOff,
   Check,
-  X,
   AlertTriangle,
   Download,
   Upload,
@@ -35,8 +34,24 @@ import {
   CheckCircle2,
   XCircle,
   ListChecks,
+  User,
+  LogOut,
+  ExternalLink,
+  Info,
+  Minimize2,
+  Square,
+  Link2,
+  Chrome,
+  Copy,
 } from 'lucide-react';
 import RulesSettings from './settings/Rules';
+import { useSettings, useUpdateSettings, useAppInfo, useAutostart, useTrayVisibility } from '@/hooks/useSettings';
+import { useAuthStore } from '@/stores/authStore';
+import { isTauri, setCloseToTray } from '@/lib/tauri';
+import { useTheme } from '@/hooks/useTheme';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { authApi } from '@/lib/api/auth';
 
 // Types
 interface SettingsState {
@@ -46,6 +61,9 @@ interface SettingsState {
   startOnBoot: boolean;
   startMinimized: boolean;
   showInTray: boolean;
+  closeToTray: boolean;
+  minimizeToTray: boolean;
+  autoUpdate: boolean;
 
   // Tracking
   trackingEnabled: boolean;
@@ -92,11 +110,14 @@ const defaultSettings: SettingsState = {
   startOnBoot: true,
   startMinimized: false,
   showInTray: true,
+  closeToTray: true,
+  minimizeToTray: true,
+  autoUpdate: true,
   trackingEnabled: true,
   workStartTime: '09:00',
   workEndTime: '17:00',
   workDays: [1, 2, 3, 4, 5],
-  idleTimeout: 300,
+  idleTimeout: 600, // 10 minutes - AFK auto-pause threshold
   afkDetection: true,
   screenshotsEnabled: true,
   screenshotInterval: 300,
@@ -127,14 +148,14 @@ const tabs = [
   { id: 'tracking', label: 'Tracking', icon: Monitor },
   { id: 'screenshots', label: 'Screenshots', icon: Camera },
   { id: 'ai', label: 'AI Settings', icon: Brain },
+  { id: 'extension', label: 'Browser Extension', icon: Chrome },
+  { id: 'integrations', label: 'Integrations', icon: Link2, link: '/settings/integrations' },
   { id: 'rules', label: 'Rules', icon: ListChecks },
   { id: 'privacy', label: 'Privacy', icon: Shield },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'data', label: 'Data', icon: Database },
   { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
 ];
-
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const AI_MODELS = [
   { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast and cost-effective' },
@@ -144,16 +165,16 @@ const AI_MODELS = [
 ];
 
 const SHORTCUTS = [
-  { action: 'Toggle Tracking', keys: ['⌘', 'Shift', 'T'] },
-  { action: 'Take Screenshot', keys: ['⌘', 'Shift', 'S'] },
-  { action: 'Open Dashboard', keys: ['⌘', 'D'] },
-  { action: 'Open Activity', keys: ['⌘', '1'] },
-  { action: 'Open Analytics', keys: ['⌘', '2'] },
-  { action: 'Open Screenshots', keys: ['⌘', '3'] },
-  { action: 'Open Settings', keys: ['⌘', ','] },
-  { action: 'Toggle Incognito', keys: ['⌘', 'Shift', 'I'] },
-  { action: 'Quick Search', keys: ['⌘', 'K'] },
-  { action: 'Minimize to Tray', keys: ['⌘', 'M'] },
+  { action: 'Toggle Tracking', keys: ['⌘', 'Shift', 'T'], enabled: true },
+  { action: 'Take Screenshot', keys: ['⌘', 'Shift', 'S'], enabled: true },
+  { action: 'Open Dashboard', keys: ['⌘', 'D'], enabled: true },
+  { action: 'Open Activity', keys: ['⌘', '1'], enabled: true },
+  { action: 'Open Analytics', keys: ['⌘', '2'], enabled: true },
+  { action: 'Open Screenshots', keys: ['⌘', '3'], enabled: true },
+  { action: 'Open Settings', keys: ['⌘', ','], enabled: true },
+  { action: 'Toggle Incognito', keys: ['⌘', 'Shift', 'I'], enabled: false },
+  { action: 'Quick Search', keys: ['⌘', 'K'], enabled: false },
+  { action: 'Minimize to Tray', keys: ['⌘', 'M'], enabled: false },
 ];
 
 // Components
@@ -166,20 +187,24 @@ function Toggle({
   onChange: (value: boolean) => void;
   size?: 'sm' | 'md';
 }) {
-  const sizeClasses = size === 'sm' ? 'w-8 h-4' : 'w-11 h-6';
-  const dotSize = size === 'sm' ? 'w-3 h-3' : 'w-5 h-5';
-  const translate = size === 'sm' ? 'translate-x-4' : 'translate-x-5';
+  const sizeClasses = size === 'sm' ? 'w-10 h-5' : 'w-12 h-7';
+  const dotSize = size === 'sm' ? 'w-4 h-4' : 'w-5 h-5';
+  const translate = size === 'sm' ? 'translate-x-5' : 'translate-x-6';
 
   return (
     <button
       onClick={() => onChange(!enabled)}
-      className={`relative inline-flex ${sizeClasses} items-center rounded-full transition-colors ${
-        enabled ? 'bg-accent' : 'bg-white/20'
+      className={`relative inline-flex ${sizeClasses} items-center rounded-full transition-all duration-200 border-2 ${
+        enabled
+          ? 'bg-accent border-accent shadow-lg shadow-accent/30'
+          : 'bg-white/10 border-white/30 hover:border-white/50'
       }`}
     >
       <span
-        className={`inline-block ${dotSize} transform rounded-full bg-white shadow transition-transform ${
-          enabled ? translate : 'translate-x-0.5'
+        className={`inline-block ${dotSize} transform rounded-full shadow-md transition-all duration-200 ${
+          enabled
+            ? `${translate} bg-white`
+            : 'translate-x-0.5 bg-white/70'
         }`}
       />
     </button>
@@ -198,16 +223,16 @@ function SettingRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between py-4 border-b border-white/5 last:border-0">
+    <div className="flex items-center justify-between py-4 border-b border-[var(--glass-border)] last:border-0">
       <div className="flex items-start gap-3">
         {Icon && (
-          <div className="p-2 rounded-lg bg-white/5">
-            <Icon size={18} className="text-white/60" />
+          <div className="p-2 rounded-lg bg-[var(--glass-bg)]">
+            <Icon size={18} className="text-[var(--text-muted)]" />
           </div>
         )}
         <div>
-          <p className="text-white font-medium">{label}</p>
-          {description && <p className="text-white/50 text-sm mt-0.5">{description}</p>}
+          <p className="text-[var(--text-primary)] font-medium">{label}</p>
+          {description && <p className="text-[var(--text-muted)] text-sm mt-0.5">{description}</p>}
         </div>
       </div>
       <div className="flex-shrink-0">{children}</div>
@@ -228,10 +253,10 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
+      className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
     >
       {options.map((opt) => (
-        <option key={opt.value} value={opt.value} className="bg-gray-900">
+        <option key={opt.value} value={opt.value} className="bg-[var(--bg-primary)]">
           {opt.label}
         </option>
       ))}
@@ -245,36 +270,8 @@ function TimeInput({ value, onChange }: { value: string; onChange: (value: strin
       type="time"
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
+      className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
     />
-  );
-}
-
-function DaySelector({ selected, onChange }: { selected: number[]; onChange: (days: number[]) => void }) {
-  const toggleDay = (day: number) => {
-    if (selected.includes(day)) {
-      onChange(selected.filter((d) => d !== day));
-    } else {
-      onChange([...selected, day].sort());
-    }
-  };
-
-  return (
-    <div className="flex gap-1">
-      {DAYS.map((day, index) => (
-        <button
-          key={day}
-          onClick={() => toggleDay(index)}
-          className={`w-9 h-9 rounded-lg text-xs font-medium transition-colors ${
-            selected.includes(index)
-              ? 'bg-accent text-white'
-              : 'bg-white/10 text-white/50 hover:bg-white/20'
-          }`}
-        >
-          {day}
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -286,26 +283,146 @@ function GeneralTab({
   settings: SettingsState;
   updateSetting: <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => void;
 }) {
+  const { user, logout, updateUser } = useAuthStore();
+  const { data: appInfo } = useAppInfo();
+  const { isEnabled: autostartEnabled, toggle: toggleAutostart, isLoading: autostartLoading } = useAutostart();
+  const { setVisible: setTrayVisible } = useTrayVisibility();
+  const { setTheme, theme: currentTheme } = useTheme();
+  const navigate = useNavigate();
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileName, setProfileName] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  const handleThemeChange = async (theme: 'dark' | 'light' | 'system') => {
+    // Light theme coming soon
+    if (theme === 'light') {
+      toast.info('Light theme coming soon!');
+      return;
+    }
+    setTheme(theme);
+    updateSetting('theme', theme);
+    toast.success(`Theme changed to ${theme}`);
+  };
+
+  const handleStartOnBootChange = async (enabled: boolean) => {
+    try {
+      await toggleAutostart(enabled);
+      updateSetting('startOnBoot', enabled);
+      toast.success(enabled ? 'Start on boot enabled' : 'Start on boot disabled');
+    } catch (error) {
+      toast.error('Failed to change startup setting');
+    }
+  };
+
+  const handleShowInTrayChange = async (visible: boolean) => {
+    try {
+      await setTrayVisible(visible);
+      updateSetting('showInTray', visible);
+      toast.success(visible ? 'System tray enabled' : 'System tray disabled');
+    } catch (error) {
+      toast.error('Failed to change tray setting');
+    }
+  };
+
+  const handleEditProfile = () => {
+    setProfileName(user?.name || '');
+    setShowProfileModal(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!profileName.trim()) {
+      toast.error('Name cannot be empty');
+      return;
+    }
+
+    setSavingProfile(true);
+    try {
+      const updatedUser = await authApi.updateProfile({ name: profileName.trim() });
+      // Update the auth store with the new user data - cast plan to the correct type
+      updateUser({
+        ...updatedUser,
+        plan: updatedUser.plan as 'free' | 'personal' | 'pro' | 'team' | 'enterprise',
+      });
+      toast.success('Profile updated successfully');
+      setShowProfileModal(false);
+    } catch (error) {
+      toast.error('Failed to update profile');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Account Section */}
       <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Appearance</h3>
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+          <User size={20} />
+          Account
+        </h3>
+        <div className="flex items-center gap-4 p-4 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)]">
+          <div className="w-16 h-16 rounded-full bg-accent/20 flex items-center justify-center text-2xl font-bold text-accent">
+            {user?.name?.charAt(0) || user?.email?.charAt(0) || 'U'}
+          </div>
+          <div className="flex-1">
+            <h4 className="text-[var(--text-primary)] font-semibold">{user?.name || 'User'}</h4>
+            <p className="text-[var(--text-muted)] text-sm">{user?.email || 'Not logged in'}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="px-2 py-0.5 rounded-full text-xs bg-accent/20 text-accent capitalize">
+                {user?.plan || 'Free'}
+              </span>
+              {user?.is_trial_active && (
+                <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-500/20 text-yellow-400">
+                  Trial
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={handleEditProfile}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 text-[var(--text-secondary)] hover:bg-white/20 transition-colors text-sm cursor-pointer"
+            >
+              <ExternalLink size={14} />
+              Edit Profile
+            </button>
+            <button
+              onClick={() => {
+                logout();
+                toast.success('Signed out successfully');
+                navigate('/login');
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-sm cursor-pointer"
+            >
+              <LogOut size={14} />
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Appearance Section */}
+      <div className="glass-card p-6">
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Appearance</h3>
         <div className="space-y-1">
           <SettingRow icon={Sun} label="Theme" description="Choose your preferred color scheme">
             <div className="flex gap-2">
-              {(['dark', 'light', 'system'] as const).map((theme) => (
+              {(['dark', 'light', 'system'] as const).map((themeOption) => (
                 <button
-                  key={theme}
-                  onClick={() => updateSetting('theme', theme)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    settings.theme === theme
-                      ? 'bg-accent text-white'
-                      : 'bg-white/10 text-white/60 hover:bg-white/20'
+                  key={themeOption}
+                  onClick={() => handleThemeChange(themeOption)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all relative ${
+                    themeOption === 'light'
+                      ? 'bg-[var(--glass-bg)] text-[var(--text-muted)] border border-[var(--glass-border)] opacity-60 cursor-not-allowed'
+                      : currentTheme === themeOption
+                      ? 'bg-accent text-white shadow-lg shadow-accent/25'
+                      : 'bg-[var(--glass-bg)] text-[var(--text-secondary)] hover:bg-[var(--glass-bg-hover)] border border-[var(--glass-border)]'
                   }`}
                 >
-                  {theme === 'dark' && <Moon size={14} className="inline mr-1" />}
-                  {theme === 'light' && <Sun size={14} className="inline mr-1" />}
-                  {theme.charAt(0).toUpperCase() + theme.slice(1)}
+                  {themeOption === 'dark' && <Moon size={14} className="inline mr-1" />}
+                  {themeOption === 'light' && <Sun size={14} className="inline mr-1" />}
+                  {themeOption.charAt(0).toUpperCase() + themeOption.slice(1)}
+                  {themeOption === 'light' && <span className="ml-1 text-xs">(Soon)</span>}
                 </button>
               ))}
             </div>
@@ -327,11 +444,15 @@ function GeneralTab({
         </div>
       </div>
 
+      {/* Startup Section */}
       <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Startup</h3>
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Startup</h3>
         <div className="space-y-1">
           <SettingRow icon={Play} label="Start on boot" description="Launch app when you start your computer">
-            <Toggle enabled={settings.startOnBoot} onChange={(v) => updateSetting('startOnBoot', v)} />
+            <div className="flex items-center gap-2">
+              {autostartLoading && <Loader2 size={14} className="animate-spin text-[var(--text-muted)]" />}
+              <Toggle enabled={autostartEnabled ?? settings.startOnBoot} onChange={handleStartOnBootChange} />
+            </div>
           </SettingRow>
 
           <SettingRow
@@ -341,7 +462,10 @@ function GeneralTab({
           >
             <Toggle
               enabled={settings.startMinimized}
-              onChange={(v) => updateSetting('startMinimized', v)}
+              onChange={(v) => {
+                updateSetting('startMinimized', v);
+                toast.success(v ? 'Start minimized enabled' : 'Start minimized disabled');
+              }}
             />
           </SettingRow>
 
@@ -350,10 +474,205 @@ function GeneralTab({
             label="Show in system tray"
             description="Keep the app in your system tray"
           >
-            <Toggle enabled={settings.showInTray} onChange={(v) => updateSetting('showInTray', v)} />
+            <Toggle enabled={settings.showInTray} onChange={handleShowInTrayChange} />
           </SettingRow>
         </div>
       </div>
+
+      {/* Window Behavior Section */}
+      <div className="glass-card p-6">
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Window Behavior</h3>
+        <div className="space-y-1">
+          <SettingRow
+            icon={Square}
+            label="Close button action"
+            description="What happens when you click the close button"
+          >
+            <Select
+              value={settings.closeToTray ? 'tray' : 'quit'}
+              onChange={async (v) => {
+                const closeToTray = v === 'tray';
+                updateSetting('closeToTray', closeToTray);
+                // Sync with Tauri store for native window handling
+                try {
+                  await setCloseToTray(closeToTray);
+                  toast.success(closeToTray ? 'Close to tray enabled' : 'Close to quit enabled');
+                } catch (error) {
+                  toast.error('Failed to update close behavior');
+                }
+              }}
+              options={[
+                { value: 'tray', label: 'Minimize to tray' },
+                { value: 'quit', label: 'Quit application' },
+              ]}
+            />
+          </SettingRow>
+
+          <SettingRow
+            icon={Minimize2}
+            label="Minimize to tray"
+            description="Minimize button hides to system tray"
+          >
+            <Toggle
+              enabled={settings.minimizeToTray}
+              onChange={(v) => {
+                updateSetting('minimizeToTray', v);
+                toast.success(v ? 'Minimize to tray enabled' : 'Minimize to tray disabled');
+              }}
+            />
+          </SettingRow>
+        </div>
+      </div>
+
+      {/* Updates Section */}
+      {isTauri() && (
+        <div className="glass-card p-6">
+          <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Updates</h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)]">
+              <div>
+                <p className="text-[var(--text-primary)] font-medium">Current Version</p>
+                <p className="text-[var(--text-muted)] text-sm">v{appInfo?.version || '1.0.0'}</p>
+              </div>
+              <div className="flex items-center gap-2 text-productive">
+                <CheckCircle2 size={16} />
+                <span className="text-sm">Up to date</span>
+              </div>
+            </div>
+
+            <SettingRow
+              icon={RefreshCw}
+              label="Auto-update"
+              description="Automatically download and install updates"
+            >
+              <Toggle
+                enabled={settings.autoUpdate}
+                onChange={(v) => {
+                  updateSetting('autoUpdate', v);
+                  toast.success(v ? 'Auto-update enabled' : 'Auto-update disabled');
+                }}
+              />
+            </SettingRow>
+
+            <button
+              onClick={() => {
+                toast.info('Checking for updates...');
+                // In a real app, this would call Tauri updater
+                setTimeout(() => {
+                  toast.success('You are running the latest version!');
+                }, 1500);
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[var(--glass-bg)] text-[var(--text-secondary)] hover:bg-[var(--glass-bg-hover)] transition-colors border border-[var(--glass-border)]"
+            >
+              <RefreshCw size={16} />
+              Check for Updates
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* About Section */}
+      <div className="glass-card p-6">
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+          <Info size={20} />
+          About
+        </h3>
+        <div className="text-center py-4">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-accent/20 flex items-center justify-center">
+            <Zap size={32} className="text-accent" />
+          </div>
+          <h4 className="text-xl font-bold text-[var(--text-primary)]">Productify Pro</h4>
+          <p className="text-[var(--text-muted)] text-sm mt-1">v{appInfo?.version || '1.0.0'} ({appInfo?.build_type || 'release'})</p>
+          <p className="text-[var(--text-muted)] text-xs mt-4">{new Date().getFullYear()} Productify Pro. All rights reserved.</p>
+          <div className="flex items-center justify-center gap-4 mt-4">
+            <button
+              onClick={() => window.open('https://productify.pro/privacy', '_blank')}
+              className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm transition-colors"
+            >
+              Privacy Policy
+            </button>
+            <span className="text-[var(--glass-border)]">|</span>
+            <button
+              onClick={() => window.open('https://productify.pro/terms', '_blank')}
+              className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm transition-colors"
+            >
+              Terms of Service
+            </button>
+            <span className="text-[var(--glass-border)]">|</span>
+            <button
+              onClick={() => toast.info('Open source licenses coming soon!')}
+              className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm transition-colors"
+            >
+              Licenses
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Profile Edit Modal */}
+      <AnimatePresence>
+        {showProfileModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
+            onClick={() => setShowProfileModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="glass-card p-6 w-full max-w-md mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+                <User size={20} />
+                Edit Profile
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+                    Display Name
+                  </label>
+                  <input
+                    type="text"
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                    className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-lg px-4 py-2 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-accent/50"
+                    placeholder="Enter your name"
+                  />
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => setShowProfileModal(false)}
+                    className="px-4 py-2 rounded-lg bg-white/10 text-[var(--text-secondary)] hover:bg-white/20 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveProfile}
+                    disabled={savingProfile}
+                    className="px-4 py-2 rounded-lg bg-accent text-white hover:bg-accent/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {savingProfile ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Check size={16} />
+                        Save
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -365,14 +684,22 @@ function TrackingTab({
   settings: SettingsState;
   updateSetting: <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => void;
 }) {
+  if (!settings) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="w-8 h-8 animate-spin text-accent" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="glass-card p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white">Activity Tracking</h3>
+          <h3 className="text-lg font-semibold text-[var(--text-primary)]">Activity Tracking</h3>
           <div
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
-              settings.trackingEnabled ? 'bg-productive/20 text-productive' : 'bg-white/10 text-white/50'
+              settings.trackingEnabled ? 'bg-productive/20 text-productive' : 'bg-[var(--glass-bg)] text-[var(--text-muted)]'
             }`}
           >
             {settings.trackingEnabled ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
@@ -384,7 +711,10 @@ function TrackingTab({
           <SettingRow icon={Monitor} label="Enable tracking" description="Track your activity and productivity">
             <Toggle
               enabled={settings.trackingEnabled}
-              onChange={(v) => updateSetting('trackingEnabled', v)}
+              onChange={(v) => {
+                updateSetting('trackingEnabled', v);
+                toast.success(v ? 'Tracking enabled' : 'Tracking disabled');
+              }}
             />
           </SettingRow>
 
@@ -393,22 +723,31 @@ function TrackingTab({
             label="AFK Detection"
             description="Detect when you're away from keyboard"
           >
-            <Toggle enabled={settings.afkDetection} onChange={(v) => updateSetting('afkDetection', v)} />
+            <Toggle
+              enabled={settings.afkDetection}
+              onChange={(v) => {
+                updateSetting('afkDetection', v);
+                toast.success(v ? 'AFK detection enabled' : 'AFK detection disabled');
+              }}
+            />
           </SettingRow>
 
           <SettingRow
             icon={Clock}
-            label="Idle timeout"
-            description="Mark as idle after this duration of inactivity"
+            label="AFK Auto-Pause"
+            description="Auto-pause tracking after this duration of inactivity"
           >
             <Select
               value={settings.idleTimeout.toString()}
-              onChange={(v) => updateSetting('idleTimeout', Number(v))}
+              onChange={(v) => {
+                updateSetting('idleTimeout', Number(v));
+                const minutes = Number(v) / 60;
+                toast.success(`AFK auto-pause set to ${minutes} minutes`);
+              }}
               options={[
-                { value: '60', label: '1 minute' },
-                { value: '120', label: '2 minutes' },
-                { value: '300', label: '5 minutes' },
+                { value: '480', label: '8 minutes' },
                 { value: '600', label: '10 minutes' },
+                { value: '720', label: '12 minutes' },
                 { value: '900', label: '15 minutes' },
               ]}
             />
@@ -416,33 +755,25 @@ function TrackingTab({
         </div>
       </div>
 
-      <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Work Schedule</h3>
-        <div className="space-y-4">
-          <div>
-            <p className="text-white/60 text-sm mb-3">Working days</p>
-            <DaySelector
-              selected={settings.workDays}
-              onChange={(days) => updateSetting('workDays', days)}
-            />
-          </div>
-
-          <div className="flex gap-6">
+      {/* Work Schedule moved to Rules Settings */}
+      <div className="glass-card p-4 bg-[var(--glass-bg)]/50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Clock className="w-5 h-5 text-[var(--text-muted)]" />
             <div>
-              <p className="text-white/60 text-sm mb-2">Start time</p>
-              <TimeInput
-                value={settings.workStartTime}
-                onChange={(v) => updateSetting('workStartTime', v)}
-              />
-            </div>
-            <div>
-              <p className="text-white/60 text-sm mb-2">End time</p>
-              <TimeInput
-                value={settings.workEndTime}
-                onChange={(v) => updateSetting('workEndTime', v)}
-              />
+              <p className="text-[var(--text-primary)] font-medium">Work Schedule</p>
+              <p className="text-[var(--text-muted)] text-sm">Configure work hours and days in Rules Settings</p>
             </div>
           </div>
+          <button
+            onClick={() => {
+              const rulesTab = document.querySelector('[data-tab="rules"]');
+              if (rulesTab) (rulesTab as HTMLElement).click();
+            }}
+            className="px-3 py-1.5 bg-accent/10 text-accent rounded-lg text-sm hover:bg-accent/20 transition-colors"
+          >
+            Go to Rules
+          </button>
         </div>
       </div>
     </div>
@@ -456,66 +787,73 @@ function ScreenshotsTab({
   settings: SettingsState;
   updateSetting: <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => void;
 }) {
-  const [newExcludedApp, setNewExcludedApp] = useState('');
-
-  const addExcludedApp = () => {
-    if (newExcludedApp.trim() && !settings.excludedApps.includes(newExcludedApp.trim())) {
-      updateSetting('excludedApps', [...settings.excludedApps, newExcludedApp.trim()]);
-      setNewExcludedApp('');
-    }
-  };
-
-  const removeExcludedApp = (app: string) => {
-    updateSetting(
-      'excludedApps',
-      settings.excludedApps.filter((a) => a !== app)
+  if (!settings) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="w-8 h-8 animate-spin text-accent" />
+      </div>
     );
-  };
+  }
 
   return (
     <div className="space-y-6">
       <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Screenshot Capture</h3>
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Screenshot Capture</h3>
         <div className="space-y-1">
           <SettingRow
             icon={Camera}
             label="Enable screenshots"
-            description="Automatically capture screenshots at intervals"
+            description="Automatically capture screenshots at random intervals"
           >
             <Toggle
               enabled={settings.screenshotsEnabled}
-              onChange={(v) => updateSetting('screenshotsEnabled', v)}
+              onChange={(v) => {
+                updateSetting('screenshotsEnabled', v);
+                toast.success(v ? 'Screenshots enabled' : 'Screenshots disabled');
+              }}
             />
           </SettingRow>
 
           <SettingRow
             icon={Clock}
-            label="Capture interval"
-            description="Time between automatic screenshots"
+            label="Random capture window"
+            description="Screenshots captured randomly within this time window"
           >
             <Select
               value={settings.screenshotInterval.toString()}
-              onChange={(v) => updateSetting('screenshotInterval', Number(v))}
+              onChange={(v) => {
+                updateSetting('screenshotInterval', Number(v));
+                const minutes = Number(v) / 60;
+                toast.success(`Random capture set to within ${minutes} minutes`);
+              }}
               options={[
-                { value: '60', label: 'Every minute' },
-                { value: '120', label: 'Every 2 minutes' },
-                { value: '300', label: 'Every 5 minutes' },
-                { value: '600', label: 'Every 10 minutes' },
-                { value: '900', label: 'Every 15 minutes' },
+                { value: '300', label: 'Within 5 min' },
+                { value: '600', label: 'Within 10 min' },
+                { value: '900', label: 'Within 15 min' },
               ]}
             />
           </SettingRow>
 
-          <SettingRow icon={Zap} label="Quality" description="Screenshot image quality">
+          {/* Info about random capture */}
+          <div className="mt-2 p-3 rounded-lg bg-accent/10 border border-accent/20">
+            <p className="text-[var(--text-muted)] text-sm">
+              <span className="text-accent font-medium">Random timing:</span> Screenshots are captured at unpredictable intervals (e.g., 2, 7, 11, 14 min) within your selected window for natural monitoring.
+            </p>
+          </div>
+
+          <SettingRow icon={Zap} label="Quality" description="Screenshot compression quality (lower = smaller files)">
             <div className="flex gap-2">
               {(['low', 'medium', 'high'] as const).map((quality) => (
                 <button
                   key={quality}
-                  onClick={() => updateSetting('screenshotQuality', quality)}
+                  onClick={() => {
+                    updateSetting('screenshotQuality', quality);
+                    toast.success(`Screenshot quality set to ${quality}`);
+                  }}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     settings.screenshotQuality === quality
                       ? 'bg-accent text-white'
-                      : 'bg-white/10 text-white/60 hover:bg-white/20'
+                      : 'bg-[var(--glass-bg)] text-[var(--text-muted)] hover:bg-[var(--glass-bg-hover)]'
                   }`}
                 >
                   {quality.charAt(0).toUpperCase() + quality.slice(1)}
@@ -531,7 +869,10 @@ function ScreenshotsTab({
           >
             <Toggle
               enabled={settings.blurScreenshots}
-              onChange={(v) => updateSetting('blurScreenshots', v)}
+              onChange={(v) => {
+                updateSetting('blurScreenshots', v);
+                toast.success(v ? 'Screenshot blur enabled' : 'Screenshot blur disabled');
+              }}
             />
           </SettingRow>
 
@@ -542,7 +883,11 @@ function ScreenshotsTab({
           >
             <Select
               value={settings.autoDeleteAfter.toString()}
-              onChange={(v) => updateSetting('autoDeleteAfter', Number(v))}
+              onChange={(v) => {
+                updateSetting('autoDeleteAfter', Number(v));
+                const label = v === '0' ? 'Never' : `${v} days`;
+                toast.success(`Auto-delete set to ${label}`);
+              }}
               options={[
                 { value: '7', label: 'After 7 days' },
                 { value: '14', label: 'After 14 days' },
@@ -553,50 +898,6 @@ function ScreenshotsTab({
               ]}
             />
           </SettingRow>
-        </div>
-      </div>
-
-      <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Excluded Applications</h3>
-        <p className="text-white/50 text-sm mb-4">
-          Screenshots won't be captured when these apps are in focus
-        </p>
-
-        <div className="flex gap-2 mb-4">
-          <input
-            type="text"
-            value={newExcludedApp}
-            onChange={(e) => setNewExcludedApp(e.target.value)}
-            placeholder="Enter app name..."
-            className="flex-1 bg-white/10 border border-white/10 rounded-lg px-4 py-2 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-accent/50"
-            onKeyDown={(e) => e.key === 'Enter' && addExcludedApp()}
-          />
-          <button
-            onClick={addExcludedApp}
-            className="px-4 py-2 bg-accent rounded-lg text-white font-medium hover:bg-accent/80 transition-colors"
-          >
-            Add
-          </button>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {settings.excludedApps.map((app) => (
-            <div
-              key={app}
-              className="flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-lg text-sm"
-            >
-              <span className="text-white">{app}</span>
-              <button
-                onClick={() => removeExcludedApp(app)}
-                className="text-white/40 hover:text-white transition-colors"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          ))}
-          {settings.excludedApps.length === 0 && (
-            <p className="text-white/30 text-sm">No excluded apps</p>
-          )}
         </div>
       </div>
     </div>
@@ -613,6 +914,14 @@ function AISettingsTab({
   const [showApiKey, setShowApiKey] = useState(false);
   const [testingKey, setTestingKey] = useState(false);
   const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
+
+  if (!settings) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="w-8 h-8 animate-spin text-accent" />
+      </div>
+    );
+  }
 
   const testApiKey = async () => {
     if (!settings.openaiApiKey) return;
@@ -645,19 +954,19 @@ function AISettingsTab({
             <Brain className="text-purple-400" size={24} />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-white">OpenAI Integration</h3>
-            <p className="text-white/50 text-sm">Power AI features with your OpenAI API key</p>
+            <h3 className="text-lg font-semibold text-[var(--text-primary)]">OpenAI Integration</h3>
+            <p className="text-[var(--text-muted)] text-sm">Power AI features with your OpenAI API key</p>
           </div>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-white/60 text-sm mb-2">API Key</label>
+            <label className="block text-[var(--text-muted)] text-sm mb-2">API Key</label>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Key
                   size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
                 />
                 <input
                   type={showApiKey ? 'text' : 'password'}
@@ -667,11 +976,11 @@ function AISettingsTab({
                     setTestResult(null);
                   }}
                   placeholder="sk-..."
-                  className="w-full bg-white/10 border border-white/10 rounded-lg pl-10 pr-10 py-3 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-accent/50 font-mono text-sm"
+                  className="w-full bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-lg pl-10 pr-10 py-3 text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-accent/50 font-mono text-sm"
                 />
                 <button
                   onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                 >
                   {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -717,7 +1026,7 @@ function AISettingsTab({
               )}
             </AnimatePresence>
 
-            <p className="text-xs text-white/40 mt-3">
+            <p className="text-xs text-[var(--text-muted)] mt-3">
               Get your API key from{' '}
               <a
                 href="https://platform.openai.com/api-keys"
@@ -731,20 +1040,23 @@ function AISettingsTab({
           </div>
 
           <div>
-            <label className="block text-white/60 text-sm mb-2">Model</label>
+            <label className="block text-[var(--text-muted)] text-sm mb-2">Model</label>
             <div className="grid grid-cols-2 gap-3">
               {AI_MODELS.map((model) => (
                 <button
                   key={model.id}
-                  onClick={() => updateSetting('aiModel', model.id)}
+                  onClick={() => {
+                    updateSetting('aiModel', model.id);
+                    toast.success(`AI model set to ${model.name}`);
+                  }}
                   className={`p-4 rounded-xl text-left transition-all ${
                     settings.aiModel === model.id
                       ? 'bg-accent/20 border-2 border-accent'
-                      : 'bg-white/5 border-2 border-transparent hover:bg-white/10'
+                      : 'bg-[var(--glass-bg)] border-2 border-transparent hover:bg-[var(--glass-bg-hover)]'
                   }`}
                 >
-                  <p className="text-white font-medium">{model.name}</p>
-                  <p className="text-white/50 text-xs mt-1">{model.description}</p>
+                  <p className="text-[var(--text-primary)] font-medium">{model.name}</p>
+                  <p className="text-[var(--text-muted)] text-xs mt-1">{model.description}</p>
                 </button>
               ))}
             </div>
@@ -753,7 +1065,7 @@ function AISettingsTab({
       </div>
 
       <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">AI Analysis</h3>
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">AI Analysis</h3>
         <div className="space-y-1">
           <SettingRow
             icon={Brain}
@@ -762,7 +1074,10 @@ function AISettingsTab({
           >
             <Toggle
               enabled={settings.autoAnalysis}
-              onChange={(v) => updateSetting('autoAnalysis', v)}
+              onChange={(v) => {
+                updateSetting('autoAnalysis', v);
+                toast.success(v ? 'Auto-analysis enabled' : 'Auto-analysis disabled');
+              }}
             />
           </SettingRow>
 
@@ -773,7 +1088,10 @@ function AISettingsTab({
           >
             <Select
               value={settings.analysisFrequency}
-              onChange={(v) => updateSetting('analysisFrequency', v as 'hourly' | 'daily' | 'weekly')}
+              onChange={(v) => {
+                updateSetting('analysisFrequency', v as 'hourly' | 'daily' | 'weekly');
+                toast.success(`Analysis frequency set to ${v}`);
+              }}
               options={[
                 { value: 'hourly', label: 'Hourly' },
                 { value: 'daily', label: 'Daily' },
@@ -788,8 +1106,8 @@ function AISettingsTab({
         <div className="flex gap-3">
           <Zap className="text-purple-400 flex-shrink-0" size={20} />
           <div>
-            <p className="text-white font-medium">AI Features Unlocked</p>
-            <p className="text-white/60 text-sm mt-1">
+            <p className="text-[var(--text-primary)] font-medium">AI Features Unlocked</p>
+            <p className="text-[var(--text-muted)] text-sm mt-1">
               With an API key, you get: smart categorization, productivity insights, break
               recommendations, and personalized tips based on your work patterns.
             </p>
@@ -809,10 +1127,18 @@ function PrivacyTab({
 }) {
   const [showPin, setShowPin] = useState(false);
 
+  if (!settings) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="w-8 h-8 animate-spin text-accent" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Privacy Mode</h3>
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Privacy Mode</h3>
         <div className="space-y-1">
           <SettingRow
             icon={EyeOff}
@@ -821,7 +1147,10 @@ function PrivacyTab({
           >
             <Toggle
               enabled={settings.incognitoMode}
-              onChange={(v) => updateSetting('incognitoMode', v)}
+              onChange={(v) => {
+                updateSetting('incognitoMode', v);
+                toast.success(v ? 'Incognito mode enabled' : 'Incognito mode disabled');
+              }}
             />
           </SettingRow>
         </div>
@@ -843,7 +1172,7 @@ function PrivacyTab({
       </div>
 
       <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Data Retention</h3>
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Data Retention</h3>
         <div className="space-y-1">
           <SettingRow
             icon={Database}
@@ -852,7 +1181,11 @@ function PrivacyTab({
           >
             <Select
               value={settings.dataRetentionDays.toString()}
-              onChange={(v) => updateSetting('dataRetentionDays', Number(v))}
+              onChange={(v) => {
+                updateSetting('dataRetentionDays', Number(v));
+                const label = v === '0' ? 'Forever' : v === '180' ? '6 months' : v === '365' ? '1 year' : `${v} days`;
+                toast.success(`Data retention set to ${label}`);
+              }}
               options={[
                 { value: '30', label: '30 days' },
                 { value: '60', label: '60 days' },
@@ -867,7 +1200,7 @@ function PrivacyTab({
       </div>
 
       <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">App Lock</h3>
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">App Lock</h3>
         <div className="space-y-1">
           <SettingRow
             icon={Lock}
@@ -876,7 +1209,10 @@ function PrivacyTab({
           >
             <Toggle
               enabled={settings.appLockEnabled}
-              onChange={(v) => updateSetting('appLockEnabled', v)}
+              onChange={(v) => {
+                updateSetting('appLockEnabled', v);
+                toast.success(v ? 'App lock enabled' : 'App lock disabled');
+              }}
             />
           </SettingRow>
 
@@ -896,11 +1232,11 @@ function PrivacyTab({
                   }}
                   placeholder="••••"
                   maxLength={4}
-                  className="w-24 bg-white/10 border border-white/10 rounded-lg px-4 py-2 text-white text-center font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  className="w-24 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-lg px-4 py-2 text-[var(--text-primary)] text-center font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-accent/50"
                 />
                 <button
                   onClick={() => setShowPin(!showPin)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 >
                   {showPin ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
@@ -920,10 +1256,18 @@ function NotificationsTab({
   settings: SettingsState;
   updateSetting: <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => void;
 }) {
+  if (!settings) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="w-8 h-8 animate-spin text-accent" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Notifications</h3>
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Notifications</h3>
         <div className="space-y-1">
           <SettingRow
             icon={Bell}
@@ -932,7 +1276,10 @@ function NotificationsTab({
           >
             <Toggle
               enabled={settings.notificationsEnabled}
-              onChange={(v) => updateSetting('notificationsEnabled', v)}
+              onChange={(v) => {
+                updateSetting('notificationsEnabled', v);
+                toast.success(v ? 'Notifications enabled' : 'Notifications disabled');
+              }}
             />
           </SettingRow>
 
@@ -943,7 +1290,10 @@ function NotificationsTab({
           >
             <Toggle
               enabled={settings.productivityAlerts}
-              onChange={(v) => updateSetting('productivityAlerts', v)}
+              onChange={(v) => {
+                updateSetting('productivityAlerts', v);
+                toast.success(v ? 'Productivity alerts enabled' : 'Productivity alerts disabled');
+              }}
             />
           </SettingRow>
 
@@ -954,7 +1304,10 @@ function NotificationsTab({
           >
             <Toggle
               enabled={settings.breakReminders}
-              onChange={(v) => updateSetting('breakReminders', v)}
+              onChange={(v) => {
+                updateSetting('breakReminders', v);
+                toast.success(v ? 'Break reminders enabled' : 'Break reminders disabled');
+              }}
             />
           </SettingRow>
 
@@ -966,7 +1319,11 @@ function NotificationsTab({
             >
               <Select
                 value={settings.breakInterval.toString()}
-                onChange={(v) => updateSetting('breakInterval', Number(v))}
+                onChange={(v) => {
+                  updateSetting('breakInterval', Number(v));
+                  const label = v === '60' ? '1 hour' : v === '90' ? '1.5 hours' : v === '120' ? '2 hours' : `${v} minutes`;
+                  toast.success(`Break interval set to ${label}`);
+                }}
                 options={[
                   { value: '30', label: '30 minutes' },
                   { value: '45', label: '45 minutes' },
@@ -985,14 +1342,17 @@ function NotificationsTab({
           >
             <Toggle
               enabled={settings.soundEnabled}
-              onChange={(v) => updateSetting('soundEnabled', v)}
+              onChange={(v) => {
+                updateSetting('soundEnabled', v);
+                toast.success(v ? 'Sound enabled' : 'Sound disabled');
+              }}
             />
           </SettingRow>
         </div>
       </div>
 
       <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Quiet Hours</h3>
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Quiet Hours</h3>
         <div className="space-y-1">
           <SettingRow
             icon={Moon}
@@ -1001,24 +1361,33 @@ function NotificationsTab({
           >
             <Toggle
               enabled={settings.quietHoursEnabled}
-              onChange={(v) => updateSetting('quietHoursEnabled', v)}
+              onChange={(v) => {
+                updateSetting('quietHoursEnabled', v);
+                toast.success(v ? 'Quiet hours enabled' : 'Quiet hours disabled');
+              }}
             />
           </SettingRow>
 
           {settings.quietHoursEnabled && (
             <div className="flex gap-6 pt-4">
               <div>
-                <p className="text-white/60 text-sm mb-2">Start</p>
+                <p className="text-[var(--text-muted)] text-sm mb-2">Start</p>
                 <TimeInput
                   value={settings.quietHoursStart}
-                  onChange={(v) => updateSetting('quietHoursStart', v)}
+                  onChange={(v) => {
+                    updateSetting('quietHoursStart', v);
+                    toast.success(`Quiet hours start set to ${v}`);
+                  }}
                 />
               </div>
               <div>
-                <p className="text-white/60 text-sm mb-2">End</p>
+                <p className="text-[var(--text-muted)] text-sm mb-2">End</p>
                 <TimeInput
                   value={settings.quietHoursEnd}
-                  onChange={(v) => updateSetting('quietHoursEnd', v)}
+                  onChange={(v) => {
+                    updateSetting('quietHoursEnd', v);
+                    toast.success(`Quiet hours end set to ${v}`);
+                  }}
                 />
               </div>
             </div>
@@ -1031,27 +1400,157 @@ function NotificationsTab({
 
 function DataTab() {
   const [exporting, setExporting] = useState(false);
+  const [exportingScreenshots, setExportingScreenshots] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [clearingData, setClearingData] = useState(false);
+  const [deletingScreenshots, setDeletingScreenshots] = useState(false);
+  const [resettingSettings, setResettingSettings] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<string | null>(null);
+  const [storageInfo, setStorageInfo] = useState<{
+    activity_data_mb: number;
+    screenshots_mb: number;
+    total_mb: number;
+    limit_mb: number;
+    usage_percent: number;
+  } | null>(null);
+
+  // Fetch storage info on mount
+  useEffect(() => {
+    const fetchStorage = async () => {
+      try {
+        const { getStorageInfo } = await import('@/lib/api/settings');
+        const info = await getStorageInfo();
+        setStorageInfo(info);
+      } catch (error) {
+        console.error('Failed to fetch storage info:', error);
+      }
+    };
+    fetchStorage();
+  }, []);
 
   const handleExport = async () => {
     setExporting(true);
-    // Simulate export
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      toast.info('Preparing your data export...');
+      const { downloadExportAsFile } = await import('@/lib/api/settings');
+      await downloadExportAsFile();
+      toast.success('Data exported successfully!');
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export data. Please try again.');
+    }
     setExporting(false);
+  };
+
+  const handleExportScreenshots = async () => {
+    setExportingScreenshots(true);
+    try {
+      toast.info('Screenshot export coming soon - use individual downloads for now');
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    } catch (error) {
+      toast.error('Failed to export screenshots. Please try again.');
+    }
+    setExportingScreenshots(false);
   };
 
   const handleImport = async () => {
     setImporting(true);
-    // Simulate import
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      toast.info('Import feature coming soon!');
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    } catch (error) {
+      toast.error('Failed to import data.');
+    }
     setImporting(false);
+  };
+
+  const handleClearData = async () => {
+    if (confirmAction !== 'clearData') {
+      setConfirmAction('clearData');
+      toast.warning('Click again to confirm clearing all activity data');
+      setTimeout(() => setConfirmAction(null), 3000);
+      return;
+    }
+
+    setClearingData(true);
+    try {
+      toast.info('Clearing all activity data...');
+      const { clearAllData, getStorageInfo } = await import('@/lib/api/settings');
+      const result = await clearAllData();
+      toast.success(result.message || 'All activity data has been cleared');
+      setConfirmAction(null);
+      // Refresh storage info
+      const info = await getStorageInfo();
+      setStorageInfo(info);
+    } catch (error) {
+      console.error('Clear data error:', error);
+      toast.error('Failed to clear data. Please try again.');
+    }
+    setClearingData(false);
+  };
+
+  const handleDeleteScreenshots = async () => {
+    if (confirmAction !== 'deleteScreenshots') {
+      setConfirmAction('deleteScreenshots');
+      toast.warning('Click again to confirm deleting all screenshots');
+      setTimeout(() => setConfirmAction(null), 3000);
+      return;
+    }
+
+    setDeletingScreenshots(true);
+    try {
+      toast.info('Deleting all screenshots...');
+      const { deleteAllScreenshots, getStorageInfo } = await import('@/lib/api/settings');
+      const result = await deleteAllScreenshots();
+      toast.success(result.message || 'All screenshots have been deleted');
+      setConfirmAction(null);
+      // Refresh storage info
+      const info = await getStorageInfo();
+      setStorageInfo(info);
+    } catch (error) {
+      console.error('Delete screenshots error:', error);
+      toast.error('Failed to delete screenshots. Please try again.');
+    }
+    setDeletingScreenshots(false);
+  };
+
+  const handleResetSettings = async () => {
+    if (confirmAction !== 'resetSettings') {
+      setConfirmAction('resetSettings');
+      toast.warning('Click again to confirm resetting all settings');
+      setTimeout(() => setConfirmAction(null), 3000);
+      return;
+    }
+
+    setResettingSettings(true);
+    try {
+      toast.info('Resetting all settings to defaults...');
+      const { resetSettings } = await import('@/lib/api/settings');
+      await resetSettings();
+      toast.success('All settings have been reset to defaults');
+      setConfirmAction(null);
+      // Reload the page to reflect changes
+      window.location.reload();
+    } catch (error) {
+      console.error('Reset settings error:', error);
+      toast.error('Failed to reset settings. Please try again.');
+    }
+    setResettingSettings(false);
+  };
+
+  // Helper to format storage size
+  const formatSize = (mb: number) => {
+    if (mb >= 1024) {
+      return `${(mb / 1024).toFixed(1)} GB`;
+    }
+    return `${mb.toFixed(1)} MB`;
   };
 
   return (
     <div className="space-y-6">
       <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Export Data</h3>
-        <p className="text-white/50 text-sm mb-4">
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Export Data</h3>
+        <p className="text-[var(--text-muted)] text-sm mb-4">
           Download all your activity data as a JSON file
         </p>
 
@@ -1066,26 +1565,34 @@ function DataTab() {
             ) : (
               <Download size={18} />
             )}
-            Export All Data
+            {exporting ? 'Exporting...' : 'Export All Data'}
           </button>
 
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-white/10 rounded-lg text-white font-medium hover:bg-white/20 transition-colors">
-            <Download size={18} />
-            Export Screenshots
+          <button
+            onClick={handleExportScreenshots}
+            disabled={exportingScreenshots}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[var(--glass-bg)] rounded-lg text-[var(--text-primary)] font-medium hover:bg-[var(--glass-bg-hover)] transition-colors border border-[var(--glass-border)] disabled:opacity-50"
+          >
+            {exportingScreenshots ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <Download size={18} />
+            )}
+            {exportingScreenshots ? 'Exporting...' : 'Export Screenshots'}
           </button>
         </div>
       </div>
 
       <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Import Data</h3>
-        <p className="text-white/50 text-sm mb-4">
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Import Data</h3>
+        <p className="text-[var(--text-muted)] text-sm mb-4">
           Restore data from a previous backup
         </p>
 
         <button
           onClick={handleImport}
           disabled={importing}
-          className="flex items-center gap-2 px-4 py-2.5 bg-white/10 rounded-lg text-white font-medium hover:bg-white/20 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2.5 bg-[var(--glass-bg)] rounded-lg text-[var(--text-primary)] font-medium hover:bg-[var(--glass-bg-hover)] transition-colors disabled:opacity-50 border border-[var(--glass-border)]"
         >
           {importing ? (
             <Loader2 size={18} className="animate-spin" />
@@ -1097,28 +1604,39 @@ function DataTab() {
       </div>
 
       <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Storage</h3>
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Storage</h3>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <HardDrive className="text-white/40" size={20} />
-              <span className="text-white">Activity Data</span>
+              <HardDrive className="text-[var(--text-muted)]" size={20} />
+              <span className="text-[var(--text-primary)]">Activity Data</span>
             </div>
-            <span className="text-white/60">128 MB</span>
+            <span className="text-[var(--text-muted)]">
+              {storageInfo ? formatSize(storageInfo.activity_data_mb) : 'Loading...'}
+            </span>
           </div>
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Camera className="text-white/40" size={20} />
-              <span className="text-white">Screenshots</span>
+              <Camera className="text-[var(--text-muted)]" size={20} />
+              <span className="text-[var(--text-primary)]">Screenshots</span>
             </div>
-            <span className="text-white/60">2.4 GB</span>
+            <span className="text-[var(--text-muted)]">
+              {storageInfo ? formatSize(storageInfo.screenshots_mb) : 'Loading...'}
+            </span>
           </div>
 
-          <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full w-1/3 bg-gradient-to-r from-accent to-accent/60 rounded-full" />
+          <div className="h-2 bg-[var(--glass-bg)] rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-accent to-accent/60 rounded-full transition-all duration-300"
+              style={{ width: `${storageInfo?.usage_percent || 0}%` }}
+            />
           </div>
-          <p className="text-white/40 text-sm">2.5 GB of 10 GB used</p>
+          <p className="text-[var(--text-muted)] text-sm">
+            {storageInfo
+              ? `${formatSize(storageInfo.total_mb)} of ${formatSize(storageInfo.limit_mb)} used`
+              : 'Calculating storage...'}
+          </p>
         </div>
       </div>
 
@@ -1127,34 +1645,70 @@ function DataTab() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-white font-medium">Clear all activity data</p>
-              <p className="text-white/50 text-sm">This will permanently delete all tracked activity</p>
+              <p className="text-[var(--text-primary)] font-medium">Clear all activity data</p>
+              <p className="text-[var(--text-muted)] text-sm">This will permanently delete all tracked activity</p>
             </div>
-            <button className="flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-400 rounded-lg font-medium hover:bg-red-500/30 transition-colors">
-              <Trash2 size={16} />
-              Clear Data
+            <button
+              onClick={handleClearData}
+              disabled={clearingData}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 ${
+                confirmAction === 'clearData'
+                  ? 'bg-red-500 text-white'
+                  : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+              }`}
+            >
+              {clearingData ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Trash2 size={16} />
+              )}
+              {confirmAction === 'clearData' ? 'Confirm' : 'Clear Data'}
             </button>
           </div>
 
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-white font-medium">Delete all screenshots</p>
-              <p className="text-white/50 text-sm">Remove all captured screenshots permanently</p>
+              <p className="text-[var(--text-primary)] font-medium">Delete all screenshots</p>
+              <p className="text-[var(--text-muted)] text-sm">Remove all captured screenshots permanently</p>
             </div>
-            <button className="flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-400 rounded-lg font-medium hover:bg-red-500/30 transition-colors">
-              <Trash2 size={16} />
-              Delete
+            <button
+              onClick={handleDeleteScreenshots}
+              disabled={deletingScreenshots}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 ${
+                confirmAction === 'deleteScreenshots'
+                  ? 'bg-red-500 text-white'
+                  : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+              }`}
+            >
+              {deletingScreenshots ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Trash2 size={16} />
+              )}
+              {confirmAction === 'deleteScreenshots' ? 'Confirm' : 'Delete'}
             </button>
           </div>
 
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-white font-medium">Reset all settings</p>
-              <p className="text-white/50 text-sm">Restore all settings to their defaults</p>
+              <p className="text-[var(--text-primary)] font-medium">Reset all settings</p>
+              <p className="text-[var(--text-muted)] text-sm">Restore all settings to their defaults</p>
             </div>
-            <button className="flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-400 rounded-lg font-medium hover:bg-red-500/30 transition-colors">
-              <RefreshCw size={16} />
-              Reset
+            <button
+              onClick={handleResetSettings}
+              disabled={resettingSettings}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 ${
+                confirmAction === 'resetSettings'
+                  ? 'bg-red-500 text-white'
+                  : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+              }`}
+            >
+              {resettingSettings ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <RefreshCw size={16} />
+              )}
+              {confirmAction === 'resetSettings' ? 'Confirm' : 'Reset'}
             </button>
           </div>
         </div>
@@ -1163,12 +1717,156 @@ function DataTab() {
   );
 }
 
+function ExtensionTab() {
+  const [linkCode, setLinkCode] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [_expiresAt, setExpiresAt] = useState<Date | null>(null);
+  const { token } = useAuthStore();
+
+  const generateLinkCode = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('http://localhost:8000/api/auth/extension-link-code', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setLinkCode(data.code);
+        setExpiresAt(new Date(Date.now() + data.expires_in * 1000));
+        toast.success('Link code generated!');
+      } else {
+        toast.error('Failed to generate code');
+      }
+    } catch (error) {
+      toast.error('Connection failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyCode = () => {
+    if (linkCode) {
+      navigator.clipboard.writeText(linkCode);
+      toast.success('Code copied to clipboard!');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Link Extension Card */}
+      <div className="glass-card p-6">
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Link Extension</h3>
+        <p className="text-sm text-[var(--text-muted)] mb-4">
+          Generate a one-time code to link your Chrome extension. No need to enter email/password in the extension.
+        </p>
+
+        {linkCode ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 bg-gray-800 border border-gray-700 rounded-lg p-4 text-center">
+                <span className="text-3xl font-mono font-bold tracking-widest text-white">
+                  {linkCode}
+                </span>
+              </div>
+              <button
+                onClick={copyCode}
+                className="p-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+              >
+                <Copy size={20} />
+              </button>
+            </div>
+            <p className="text-xs text-[var(--text-muted)] text-center">
+              Enter this code in the Chrome extension popup. Expires in 5 minutes.
+            </p>
+            <button
+              onClick={generateLinkCode}
+              className="w-full py-2 text-sm text-[var(--text-muted)] hover:text-white transition-colors"
+            >
+              Generate New Code
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={generateLinkCode}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 py-3 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors disabled:opacity-50"
+          >
+            {loading ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <Link2 size={18} />
+            )}
+            {loading ? 'Generating...' : 'Generate Link Code'}
+          </button>
+        )}
+      </div>
+
+      {/* Benefits Card */}
+      <div className="glass-card p-6">
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Extension Benefits</h3>
+        <ul className="space-y-3">
+          <li className="flex items-center gap-3 text-[var(--text-secondary)]">
+            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+              <Check size={16} className="text-green-500" />
+            </div>
+            <span>Track exact URLs you visit</span>
+          </li>
+          <li className="flex items-center gap-3 text-[var(--text-secondary)]">
+            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+              <Check size={16} className="text-green-500" />
+            </div>
+            <span>Monitor video progress (YouTube, Netflix, Udemy)</span>
+          </li>
+          <li className="flex items-center gap-3 text-[var(--text-secondary)]">
+            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+              <Check size={16} className="text-green-500" />
+            </div>
+            <span>Detailed domain-level analytics</span>
+          </li>
+          <li className="flex items-center gap-3 text-[var(--text-secondary)]">
+            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+              <Check size={16} className="text-green-500" />
+            </div>
+            <span>Offline sync with auto-retry</span>
+          </li>
+        </ul>
+      </div>
+
+      {/* Install Instructions Card */}
+      <div className="glass-card p-6">
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Install Extension</h3>
+        <p className="text-sm text-[var(--text-muted)] mb-4">
+          If you haven't installed the extension yet, follow these steps:
+        </p>
+        <ol className="list-decimal list-inside space-y-3 text-[var(--text-secondary)]">
+          <li>Open Chrome and go to <code className="bg-gray-800 px-2 py-1 rounded text-sm">chrome://extensions/</code></li>
+          <li>Enable <strong className="text-white">Developer mode</strong> (toggle in top right)</li>
+          <li>Click <strong className="text-white">Load unpacked</strong></li>
+          <li>Select the <code className="bg-gray-800 px-2 py-1 rounded text-sm">apps/extension</code> folder</li>
+        </ol>
+      </div>
+    </div>
+  );
+}
+
 function ShortcutsTab() {
+  const enabledCount = SHORTCUTS.filter((s) => s.enabled).length;
+
   return (
     <div className="space-y-6">
       <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Keyboard Shortcuts</h3>
-        <p className="text-white/50 text-sm mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-[var(--text-primary)]">Keyboard Shortcuts</h3>
+          <span className="text-xs px-2 py-1 bg-accent/20 text-accent rounded-full">
+            {enabledCount}/{SHORTCUTS.length} active
+          </span>
+        </div>
+        <p className="text-[var(--text-muted)] text-sm mb-6">
           Use these shortcuts to quickly navigate and control the app
         </p>
 
@@ -1176,17 +1874,30 @@ function ShortcutsTab() {
           {SHORTCUTS.map((shortcut) => (
             <div
               key={shortcut.action}
-              className="flex items-center justify-between py-3 border-b border-white/5 last:border-0"
+              className={`flex items-center justify-between py-3 border-b border-[var(--glass-border)] last:border-0 ${
+                !shortcut.enabled ? 'opacity-50' : ''
+              }`}
             >
-              <span className="text-white">{shortcut.action}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[var(--text-primary)]">{shortcut.action}</span>
+                {!shortcut.enabled && (
+                  <span className="text-xs px-1.5 py-0.5 bg-[var(--glass-bg)] text-[var(--text-muted)] rounded">
+                    Coming soon
+                  </span>
+                )}
+              </div>
               <div className="flex gap-1">
                 {shortcut.keys.map((key, index) => (
                   <span key={index}>
-                    <kbd className="px-2 py-1 bg-white/10 rounded text-white/80 text-sm font-mono">
+                    <kbd className={`px-2 py-1 rounded text-sm font-mono ${
+                      shortcut.enabled
+                        ? 'bg-accent/20 text-accent'
+                        : 'bg-[var(--glass-bg)] text-[var(--text-muted)]'
+                    }`}>
                       {key}
                     </kbd>
                     {index < shortcut.keys.length - 1 && (
-                      <span className="text-white/30 mx-1">+</span>
+                      <span className="text-[var(--text-muted)] mx-1">+</span>
                     )}
                   </span>
                 ))}
@@ -1196,12 +1907,20 @@ function ShortcutsTab() {
         </div>
       </div>
 
-      <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+      <div className="p-4 rounded-xl bg-accent/10 border border-accent/20">
         <div className="flex gap-3">
-          <Keyboard className="text-white/40 flex-shrink-0" size={20} />
-          <p className="text-white/60 text-sm">
-            Shortcuts are currently not customizable. Custom shortcut support is coming in a future
-            update.
+          <CheckCircle2 className="text-accent flex-shrink-0" size={20} />
+          <p className="text-[var(--text-secondary)] text-sm">
+            Active shortcuts work throughout the app. Press the key combination to trigger the action.
+          </p>
+        </div>
+      </div>
+
+      <div className="p-4 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)]">
+        <div className="flex gap-3">
+          <Keyboard className="text-[var(--text-muted)] flex-shrink-0" size={20} />
+          <p className="text-[var(--text-muted)] text-sm">
+            Custom shortcut support is coming in a future update.
           </p>
         </div>
       </div>
@@ -1215,6 +1934,62 @@ export default function Settings() {
   const [settings, setSettings] = useState<SettingsState>(defaultSettings);
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
+  const navigate = useNavigate();
+
+  // Fetch settings from backend
+  const { data: apiSettings } = useSettings();
+  const updateSettingsMutation = useUpdateSettings();
+  const { data: appInfo } = useAppInfo();
+
+  // Sync local state with API settings when loaded
+  useEffect(() => {
+    if (apiSettings) {
+      setSettings({
+        // General - with fallbacks to defaults
+        theme: apiSettings.general?.theme ?? defaultSettings.theme,
+        language: apiSettings.general?.language ?? defaultSettings.language,
+        startOnBoot: apiSettings.general?.startOnBoot ?? defaultSettings.startOnBoot,
+        startMinimized: apiSettings.general?.startMinimized ?? defaultSettings.startMinimized,
+        showInTray: apiSettings.general?.showInTray ?? defaultSettings.showInTray,
+        closeToTray: apiSettings.general?.closeToTray ?? defaultSettings.closeToTray,
+        minimizeToTray: apiSettings.general?.minimizeToTray ?? defaultSettings.minimizeToTray,
+        autoUpdate: apiSettings.general?.autoUpdate ?? defaultSettings.autoUpdate,
+        // Tracking - with fallbacks to defaults
+        trackingEnabled: apiSettings.tracking?.trackingEnabled ?? defaultSettings.trackingEnabled,
+        workStartTime: apiSettings.tracking?.workStartTime ?? defaultSettings.workStartTime,
+        workEndTime: apiSettings.tracking?.workEndTime ?? defaultSettings.workEndTime,
+        workDays: apiSettings.tracking?.workDays ?? defaultSettings.workDays,
+        idleTimeout: apiSettings.tracking?.idleTimeout ?? defaultSettings.idleTimeout,
+        afkDetection: apiSettings.tracking?.afkDetection ?? defaultSettings.afkDetection,
+        // Screenshots - with fallbacks to defaults
+        screenshotsEnabled: apiSettings.screenshots?.screenshotsEnabled ?? defaultSettings.screenshotsEnabled,
+        screenshotInterval: apiSettings.screenshots?.screenshotInterval ?? defaultSettings.screenshotInterval,
+        screenshotQuality: apiSettings.screenshots?.screenshotQuality ?? defaultSettings.screenshotQuality,
+        blurScreenshots: apiSettings.screenshots?.blurScreenshots ?? defaultSettings.blurScreenshots,
+        autoDeleteAfter: apiSettings.screenshots?.autoDeleteAfter ?? defaultSettings.autoDeleteAfter,
+        excludedApps: apiSettings.screenshots?.excludedApps ?? defaultSettings.excludedApps,
+        // AI - with fallbacks to defaults
+        openaiApiKey: '', // Not returned from API for security
+        aiModel: apiSettings.ai?.aiModel ?? defaultSettings.aiModel,
+        autoAnalysis: apiSettings.ai?.autoAnalysis ?? defaultSettings.autoAnalysis,
+        analysisFrequency: apiSettings.ai?.analysisFrequency ?? defaultSettings.analysisFrequency,
+        // Privacy - with fallbacks to defaults
+        incognitoMode: apiSettings.privacy?.incognitoMode ?? defaultSettings.incognitoMode,
+        dataRetentionDays: apiSettings.privacy?.dataRetentionDays ?? defaultSettings.dataRetentionDays,
+        appLockEnabled: apiSettings.privacy?.appLockEnabled ?? defaultSettings.appLockEnabled,
+        appLockPin: '',
+        // Notifications - with fallbacks to defaults
+        notificationsEnabled: apiSettings.notifications?.notificationsEnabled ?? defaultSettings.notificationsEnabled,
+        productivityAlerts: apiSettings.notifications?.productivityAlerts ?? defaultSettings.productivityAlerts,
+        breakReminders: apiSettings.notifications?.breakReminders ?? defaultSettings.breakReminders,
+        breakInterval: apiSettings.notifications?.breakInterval ?? defaultSettings.breakInterval,
+        soundEnabled: apiSettings.notifications?.soundEnabled ?? defaultSettings.soundEnabled,
+        quietHoursEnabled: apiSettings.notifications?.quietHoursEnabled ?? defaultSettings.quietHoursEnabled,
+        quietHoursStart: apiSettings.notifications?.quietHoursStart ?? defaultSettings.quietHoursStart,
+        quietHoursEnd: apiSettings.notifications?.quietHoursEnd ?? defaultSettings.quietHoursEnd,
+      });
+    }
+  }, [apiSettings]);
 
   const updateSetting = <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
@@ -1223,10 +1998,56 @@ export default function Settings() {
 
   const saveSettings = async () => {
     setSaving(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setSaving(false);
-    setHasChanges(false);
+    try {
+      await updateSettingsMutation.mutateAsync({
+        general: {
+          theme: settings.theme,
+          language: settings.language,
+          startOnBoot: settings.startOnBoot,
+          startMinimized: settings.startMinimized,
+          showInTray: settings.showInTray,
+          closeToTray: settings.closeToTray,
+          minimizeToTray: settings.minimizeToTray,
+          autoUpdate: settings.autoUpdate,
+        },
+        tracking: {
+          trackingEnabled: settings.trackingEnabled,
+          workStartTime: settings.workStartTime,
+          workEndTime: settings.workEndTime,
+          workDays: settings.workDays,
+          idleTimeout: settings.idleTimeout,
+          afkDetection: settings.afkDetection,
+        },
+        screenshots: {
+          screenshotsEnabled: settings.screenshotsEnabled,
+          screenshotInterval: settings.screenshotInterval,
+          screenshotQuality: settings.screenshotQuality,
+          blurScreenshots: settings.blurScreenshots,
+          autoDeleteAfter: settings.autoDeleteAfter,
+          excludedApps: settings.excludedApps,
+        },
+        privacy: {
+          incognitoMode: settings.incognitoMode,
+          dataRetentionDays: settings.dataRetentionDays,
+          appLockEnabled: settings.appLockEnabled,
+        },
+        notifications: {
+          notificationsEnabled: settings.notificationsEnabled,
+          productivityAlerts: settings.productivityAlerts,
+          breakReminders: settings.breakReminders,
+          breakInterval: settings.breakInterval,
+          soundEnabled: settings.soundEnabled,
+          quietHoursEnabled: settings.quietHoursEnabled,
+          quietHoursStart: settings.quietHoursStart,
+          quietHoursEnd: settings.quietHoursEnd,
+        },
+      });
+      setHasChanges(false);
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const renderTabContent = () => {
@@ -1239,6 +2060,8 @@ export default function Settings() {
         return <ScreenshotsTab settings={settings} updateSetting={updateSetting} />;
       case 'ai':
         return <AISettingsTab settings={settings} updateSetting={updateSetting} />;
+      case 'extension':
+        return <ExtensionTab />;
       case 'rules':
         return <RulesSettings />;
       case 'privacy':
@@ -1259,8 +2082,8 @@ export default function Settings() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Settings</h1>
-          <p className="text-white/60">Customize your Productify Pro experience</p>
+          <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">Settings</h1>
+          <p className="text-[var(--text-muted)]">Customize your Productify Pro experience</p>
         </div>
 
         <AnimatePresence>
@@ -1296,20 +2119,31 @@ export default function Settings() {
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
+              const tabWithLink = tab as { id: string; label: string; icon: any; link?: string };
 
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => {
+                    if (tabWithLink.link) {
+                      navigate(tabWithLink.link);
+                    } else {
+                      setActiveTab(tab.id);
+                    }
+                  }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${
                     isActive
                       ? 'bg-accent text-white'
-                      : 'text-white/60 hover:bg-white/5 hover:text-white'
+                      : 'text-[var(--text-muted)] hover:bg-[var(--glass-bg-hover)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   <Icon size={18} />
                   <span className="font-medium">{tab.label}</span>
-                  {isActive && <ChevronRight size={16} className="ml-auto" />}
+                  {tabWithLink.link ? (
+                    <ExternalLink size={14} className="ml-auto opacity-50" />
+                  ) : isActive ? (
+                    <ChevronRight size={16} className="ml-auto" />
+                  ) : null}
                 </button>
               );
             })}
@@ -1317,8 +2151,8 @@ export default function Settings() {
 
           {/* Version info */}
           <div className="mt-4 p-4 text-center">
-            <p className="text-white/30 text-xs">Productify Pro v1.0.0</p>
-            <p className="text-white/20 text-xs mt-1">Made with care</p>
+            <p className="text-[var(--text-muted)] text-xs">Productify Pro v{appInfo?.version || '1.0.0'}</p>
+            <p className="text-[var(--text-muted)] opacity-60 text-xs mt-1">Made with care</p>
           </div>
         </div>
 

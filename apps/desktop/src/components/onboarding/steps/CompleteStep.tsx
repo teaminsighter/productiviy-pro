@@ -104,7 +104,7 @@ export function CompleteStep({ data, onComplete, isLoading }: CompleteStepProps)
           damping: 15,
           delay: 0.2,
         }}
-        className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-productive to-green-400 flex items-center justify-center shadow-2xl shadow-productive/30"
+        className="w-24 h-24 mx-auto mb-6 rounded-full bg-productive flex items-center justify-center shadow-2xl shadow-productive/30"
       >
         <CheckCircle2 className="text-white" size={48} />
       </motion.div>
@@ -207,16 +207,24 @@ export function CompleteStep({ data, onComplete, isLoading }: CompleteStepProps)
         </div>
       </motion.div>
 
-      {/* CTA Button */}
+      {/* CTA Button - Glass green 3D button */}
       <motion.button
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 1.1 }}
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
+        whileHover={{ scale: 1.02, y: -3 }}
+        whileTap={{ scale: 0.98, y: 0 }}
         onClick={onComplete}
         disabled={isLoading}
-        className="px-8 py-4 rounded-2xl bg-gradient-to-r from-accent to-purple-500 text-white font-semibold text-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 mx-auto shadow-xl shadow-accent/30"
+        className="px-12 py-4 rounded-2xl text-white font-bold text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 mx-auto"
+        style={{
+          background: isLoading ? 'rgba(16, 185, 129, 0.5)' : 'rgba(16, 185, 129, 0.85)',
+          backdropFilter: 'blur(12px)',
+          boxShadow: isLoading
+            ? 'none'
+            : '0 8px 32px rgba(16, 185, 129, 0.35), 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.2), inset 0 -2px 4px rgba(0, 0, 0, 0.15)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+        }}
       >
         {isLoading ? (
           <>

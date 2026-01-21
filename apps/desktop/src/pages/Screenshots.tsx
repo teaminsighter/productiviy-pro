@@ -16,14 +16,12 @@ import {
   AlertCircle,
   RefreshCw,
   Settings,
-  Loader2,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { GlassCard, SearchInput, ProductivityBadge } from '@/components/common';
 import {
   useScreenshots,
-  useCaptureScreenshot,
   useDeleteScreenshot,
   useScreenshotStats,
 } from '@/hooks/useScreenshots';
@@ -340,9 +338,6 @@ export default function Screenshots() {
   // Fetch stats
   const { data: stats } = useScreenshotStats(7);
 
-  // Capture mutation
-  const captureMutation = useCaptureScreenshot();
-
   // Delete mutation
   const deleteMutation = useDeleteScreenshot();
 
@@ -353,15 +348,6 @@ export default function Screenshots() {
       s.app_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.window_title?.toLowerCase().includes(searchQuery.toLowerCase())
   ) || [];
-
-  // Handle capture
-  const handleCapture = async () => {
-    try {
-      await captureMutation.mutateAsync();
-    } catch (err) {
-      console.error('Failed to capture screenshot:', err);
-    }
-  };
 
   // Handle delete
   const handleDelete = async (id: string) => {
@@ -404,21 +390,9 @@ export default function Screenshots() {
           <h1 className="text-lg font-bold text-white">Screenshots</h1>
           <p className="text-sm text-white/50">Captured moments from your work sessions</p>
         </div>
-        <div className="flex items-center gap-3">
-          <motion.button
-            onClick={handleCapture}
-            disabled={captureMutation.isPending}
-            className="glass-button-primary flex items-center gap-2 disabled:opacity-50"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            {captureMutation.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Camera className="w-4 h-4" />
-            )}
-            Capture Now
-          </motion.button>
+        <div className="flex items-center gap-2 text-white/50 text-sm">
+          <Clock className="w-4 h-4" />
+          <span>Auto-capture every 7-13 min</span>
         </div>
       </div>
 
@@ -527,25 +501,13 @@ export default function Screenshots() {
             <p className="text-white/50 text-sm max-w-md mb-4">
               Screenshots are captured automatically at random intervals to help you review your work sessions.
             </p>
-            <div className="flex gap-3">
-              <motion.button
-                onClick={handleCapture}
-                disabled={captureMutation.isPending}
-                className="flex items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 rounded-lg text-primary transition-colors"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <Camera className="w-4 h-4" />
-                Capture Now
-              </motion.button>
-              <Link
-                to="/settings"
-                className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white/70 transition-colors"
-              >
-                <Settings className="w-4 h-4" />
-                Configure
-              </Link>
-            </div>
+            <Link
+              to="/settings"
+              className="flex items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 rounded-lg text-primary transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+              Configure Settings
+            </Link>
           </div>
         </GlassCard>
       ) : viewMode === 'grid' ? (

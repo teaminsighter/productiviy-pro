@@ -3,6 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { ErrorBoundary, QuickActions } from '@/components/common';
+import { UpdateBanner } from '@/components/common/UpdateBanner';
+import { FocusAutoStartModal, DistractionBlockedModal } from '@/components/focus';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { useFocusAutoStart } from '@/hooks/useFocusAutoStart';
+import { useFocusNotifications } from '@/hooks/useFocusNotifications';
+import { useDistractionBlocking } from '@/hooks/useDistractionBlocking';
 
 const pageTransition = {
   initial: { opacity: 0, y: 20 },
@@ -13,6 +19,33 @@ const pageTransition = {
 
 export function Layout() {
   const location = useLocation();
+
+  // Enable global keyboard shortcuts
+  useKeyboardShortcuts();
+
+  // Focus mode auto-start
+  const {
+    pendingAutoStart,
+    showAutoStartPrompt,
+    isStarting,
+    confirmAutoStart,
+    dismissAutoStart,
+    snoozeAutoStart,
+  } = useFocusAutoStart({ enabled: true });
+
+  // Focus mode notifications (runs in background)
+  useFocusNotifications({ enabled: true });
+
+  // Distraction blocking
+  const {
+    showBlockedModal,
+    blockedItem,
+    blockingMode,
+    sessionEndTime,
+    dismissModal,
+    handleBypass,
+    handleStayFocused,
+  } = useDistractionBlocking({ enabled: true });
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -26,6 +59,9 @@ export function Layout() {
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Header */}
         <Header />
+
+        {/* Update Banner (shows when update available) */}
+        <UpdateBanner />
 
         {/* Page Content with transition */}
         <main className="flex-1 overflow-y-auto p-6">
@@ -48,6 +84,30 @@ export function Layout() {
 
       {/* Quick Actions Floating Button */}
       <QuickActions />
+
+      {/* Focus Auto-Start Modal */}
+      <FocusAutoStartModal
+        isVisible={showAutoStartPrompt}
+        eventTitle={pendingAutoStart?.title || 'Focus Time'}
+        eventTime={pendingAutoStart?.startTime || new Date().toISOString()}
+        duration={pendingAutoStart?.duration || 50}
+        isStarting={isStarting}
+        onConfirm={confirmAutoStart}
+        onDismiss={dismissAutoStart}
+        onSnooze={snoozeAutoStart}
+      />
+
+      {/* Distraction Blocking Modal */}
+      <DistractionBlockedModal
+        isVisible={showBlockedModal}
+        blockedItem={blockedItem?.item || ''}
+        itemType={blockedItem?.type || 'app'}
+        blockingMode={blockingMode}
+        sessionEndTime={sessionEndTime || undefined}
+        onBypass={handleBypass}
+        onDismiss={dismissModal}
+        onStayFocused={handleStayFocused}
+      />
     </div>
   );
 }

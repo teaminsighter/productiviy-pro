@@ -2,7 +2,7 @@
 Goals, Streaks, Achievements, and Focus Session Models
 """
 
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Enum, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Enum, Text, ForeignKey, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -65,6 +65,10 @@ class AchievementType(str, enum.Enum):
 class Goal(Base):
     """User-defined productivity goals"""
     __tablename__ = "goals"
+    __table_args__ = (
+        Index("ix_goals_user_active", "user_id", "is_active"),
+        Index("ix_goals_user_type", "user_id", "goal_type"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # nullable for migration
@@ -208,13 +212,17 @@ class Achievement(Base):
 class FocusSession(Base):
     """Focus timer sessions"""
     __tablename__ = "focus_sessions"
+    __table_args__ = (
+        Index("ix_focus_sessions_user_time", "user_id", "started_at"),
+        Index("ix_focus_sessions_user_completed", "user_id", "was_completed"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # nullable for migration
     name = Column(String(255), nullable=True)
     duration_planned = Column(Integer, nullable=False)  # In seconds
     duration_actual = Column(Integer, nullable=True)  # In seconds
-    started_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime, default=datetime.utcnow, index=True)
     ended_at = Column(DateTime, nullable=True)
     was_completed = Column(Boolean, default=False)
     was_interrupted = Column(Boolean, default=False)

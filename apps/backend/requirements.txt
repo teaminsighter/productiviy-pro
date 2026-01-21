@@ -9,6 +9,7 @@ python-dotenv>=1.0.0
 sqlalchemy[asyncio]>=2.0.25
 asyncpg>=0.29.0
 aiosqlite>=0.19.0
+alembic>=1.13.0
 
 # Authentication
 python-jose[cryptography]>=3.3.0
@@ -23,6 +24,7 @@ pillow>=10.2.0
 
 # AI
 openai>=1.10.0
+deepgram-sdk>=3.0.0
 
 # PDF
 reportlab>=4.0.0
@@ -30,6 +32,8 @@ reportlab>=4.0.0
 # Security
 keyring>=24.3.0
 cryptography>=41.0.0
+slowapi>=0.1.9
+redis>=5.0.0
 
 # Utilities
 websockets>=12.0
@@ -43,5 +47,20 @@ stripe>=7.0.0
 firebase-admin>=6.2.0
 supabase>=2.0.0
 
+# Email
+resend>=0.7.0
+
+# Error Tracking
+sentry-sdk[fastapi]>=1.39.0
+
 # ActivityWatch client (optional for desktop)
 # aw-client>=0.5.13
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+httpx>=0.26.0
+pytest-mock>=3.12.0
+factory-boy>=3.3.0
+faker>=22.0.0

@@ -45,7 +45,7 @@ export function Header() {
   };
 
   return (
-    <header className="h-16 px-6 flex items-center justify-between border-b border-white/10 bg-black/10 backdrop-blur-sm">
+    <header className="h-16 px-6 flex items-center justify-between border-b border-white/10 bg-black/10 backdrop-blur-sm relative z-40">
       {/* Page Title */}
       <motion.div
         key={location.pathname}

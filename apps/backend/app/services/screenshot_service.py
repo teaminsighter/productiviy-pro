@@ -1,6 +1,7 @@
 import mss
 from PIL import Image
 import io
+import os
 from pathlib import Path
 from datetime import datetime, timedelta
 import uuid
@@ -8,6 +9,7 @@ from typing import Optional
 import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
+from apscheduler.triggers.cron import CronTrigger
 import random
 
 from app.core.config import settings
@@ -17,6 +19,14 @@ from app.services.firebase_storage import firebase_storage
 
 class ScreenshotService:
     """Service for capturing and managing screenshots"""
+
+    # Professional screenshot sizes (like Hubstaff/Time Doctor)
+    RESOLUTION_PRESETS = {
+        "full": None,           # Original resolution
+        "high": (1920, 1080),   # Full HD
+        "medium": (1280, 720),  # HD - Best balance (recommended)
+        "low": (854, 480),      # SD - Smallest size
+    }
 
     def __init__(self):
         # Expand ~ to actual home directory
@@ -28,7 +38,10 @@ class ScreenshotService:
         self.max_interval = 13  # minutes (maximum, under 15 as requested)
         self.excluded_apps = []
         self.blur_mode = "never"
-        self.quality = 70
+        self.quality = 50       # Lower quality for smaller files (was 70)
+        self.resolution = "medium"  # 1280x720 - good balance
+        self.format = "webp"    # WebP for best compression
+        self.retention_days = 30  # Auto-delete after 30 days
         self.current_user_id: Optional[int] = None  # Set by auth context
 
     def start_scheduler(self):
@@ -36,6 +49,7 @@ class ScreenshotService:
         if not self.scheduler.running:
             self.scheduler.start()
         self._schedule_next_capture()
+        self._schedule_daily_cleanup()
 
     def stop_scheduler(self):
         """Stop the screenshot scheduler"""
@@ -66,12 +80,138 @@ class ScreenshotService:
         )
         print(f"📸 Next screenshot scheduled in {interval_minutes} minutes (at {next_run_time.strftime('%H:%M:%S')})")
 
+    def _schedule_daily_cleanup(self):
+        """Schedule daily cleanup of old screenshots at 3 AM"""
+        try:
+            self.scheduler.remove_job('screenshot_cleanup')
+        except Exception:
+            pass
+
+        self.scheduler.add_job(
+            self._cleanup_old_screenshots,
+            trigger=CronTrigger(hour=3, minute=0),  # Run at 3 AM daily
+            id='screenshot_cleanup',
+            replace_existing=True,
+        )
+        print(f"🗑️  Screenshot cleanup scheduled daily at 3:00 AM (retention: {self.retention_days} days)")
+
+    async def _cleanup_old_screenshots(self):
+        """Delete screenshots older than retention period"""
+        if self.retention_days <= 0:
+            return  # Retention disabled
+
+        cutoff_date = datetime.now() - timedelta(days=self.retention_days)
+        deleted_count = 0
+        freed_bytes = 0
+
+        try:
+            from app.models.screenshot import Screenshot
+            from sqlalchemy import select
+
+            async with async_session() as session:
+                # Find old screenshots
+                result = await session.execute(
+                    select(Screenshot).where(Screenshot.timestamp < cutoff_date)
+                )
+                old_screenshots = result.scalars().all()
+
+                for screenshot in old_screenshots:
+                    # Delete local files
+                    if screenshot.image_path and os.path.exists(screenshot.image_path):
+                        try:
+                            freed_bytes += os.path.getsize(screenshot.image_path)
+                            os.remove(screenshot.image_path)
+                        except OSError:
+                            pass
+
+                    if screenshot.thumbnail_path and os.path.exists(screenshot.thumbnail_path):
+                        try:
+                            freed_bytes += os.path.getsize(screenshot.thumbnail_path)
+                            os.remove(screenshot.thumbnail_path)
+                        except OSError:
+                            pass
+
+                    # Delete from database
+                    await session.delete(screenshot)
+                    deleted_count += 1
+
+                await session.commit()
+
+            if deleted_count > 0:
+                freed_mb = freed_bytes / (1024 * 1024)
+                print(f"🗑️  Cleaned up {deleted_count} old screenshots, freed {freed_mb:.1f} MB")
+        except Exception as e:
+            print(f"Failed to cleanup old screenshots: {e}")
+
     async def _capture_and_reschedule(self):
         """Capture screenshot and schedule next one"""
         print(f"📸 Capturing screenshot at {datetime.now().strftime('%H:%M:%S')}")
-        await self.capture_screenshot()
+
+        # Get current activity for metadata
+        app_name = None
+        window_title = None
+        url = None
+        category = "other"
+
+        try:
+            # Import here to avoid circular imports
+            from app.api.routes.activities import get_current_native_activity
+            from app.services.classification import classify_activity
+
+            native_activity = get_current_native_activity()
+            if native_activity:
+                app_name = native_activity.get("app_name")
+                window_title = native_activity.get("window_title")
+                url = native_activity.get("url")
+                classification = classify_activity(app_name or "", window_title or "", url)
+                category = classification.category
+                print(f"📸 Activity: {app_name} - {window_title[:50] if window_title else 'N/A'}")
+        except Exception as e:
+            print(f"📸 Could not get activity metadata: {e}")
+
+        result = await self.capture_screenshot()
+
+        # Update screenshot with activity metadata
+        if result:
+            try:
+                from app.models.screenshot import Screenshot
+                from sqlalchemy import update
+
+                async with async_session() as session:
+                    await session.execute(
+                        update(Screenshot)
+                        .where(Screenshot.id == result["id"])
+                        .values(
+                            app_name=app_name,
+                            window_title=window_title,
+                            url=url,
+                            category=category,
+                        )
+                    )
+                    await session.commit()
+            except Exception as e:
+                print(f"📸 Could not update screenshot metadata: {e}")
+
         # Schedule the next capture with a new random interval
         self._schedule_next_capture()
+
+    def _resize_image(self, img: Image.Image) -> Image.Image:
+        """Resize image to configured resolution preset"""
+        target_size = self.RESOLUTION_PRESETS.get(self.resolution)
+        if target_size is None:
+            return img  # Return original if "full" resolution
+
+        # Maintain aspect ratio
+        img.thumbnail(target_size, Image.Resampling.LANCZOS)
+        return img
+
+    def _get_file_extension(self) -> str:
+        """Get file extension based on format"""
+        return "webp" if self.format == "webp" else "jpg"
+
+    def _get_mime_type(self) -> str:
+        """Get MIME type based on format"""
+        return "image/webp" if self.format == "webp" else "image/jpeg"
 
     async def capture_screenshot(self, user_id: Optional[int] = None) -> Optional[dict]:
         """Capture a screenshot of the primary monitor"""
@@ -95,6 +235,9 @@ class ScreenshotService:
                     'raw',
                     'BGRX'
                 )
+
+                # Resize to configured resolution (professional optimization)
+                img = self._resize_image(img)
 
                 # Generate identifiers
                 timestamp = datetime.now()
@@ -149,19 +292,26 @@ class ScreenshotService:
             return None
 
     async def _save_locally(self, img: Image.Image, timestamp: datetime, screenshot_id: str, user_id: Optional[int]) -> dict:
-        """Save screenshot to local filesystem"""
-        filename = f"{timestamp.strftime('%Y%m%d_%H%M%S')}_{screenshot_id}.jpg"
-        thumbnail_filename = f"{timestamp.strftime('%Y%m%d_%H%M%S')}_{screenshot_id}_thumb.jpg"
+        """Save screenshot to local filesystem using WebP for optimal compression"""
+        ext = self._get_file_extension()
+        filename = f"{timestamp.strftime('%Y%m%d_%H%M%S')}_{screenshot_id}.{ext}"
+        thumbnail_filename = f"{timestamp.strftime('%Y%m%d_%H%M%S')}_{screenshot_id}_thumb.{ext}"
 
-        # Save full image
+        # Save full image (WebP or JPEG based on format setting)
         image_path = self.screenshots_path / filename
-        img.save(str(image_path), 'JPEG', quality=self.quality)
+        if self.format == "webp":
+            img.save(str(image_path), 'WEBP', quality=self.quality, method=4)
+        else:
+            img.save(str(image_path), 'JPEG', quality=self.quality)
 
-        # Create and save thumbnail
+        # Create and save thumbnail (smaller size for list views)
         thumbnail = img.copy()
-        thumbnail.thumbnail((320, 180))
+        thumbnail.thumbnail((320, 180), Image.Resampling.LANCZOS)
         thumbnail_path = self.screenshots_path / thumbnail_filename
-        thumbnail.save(str(thumbnail_path), 'JPEG', quality=60)
+        if self.format == "webp":
+            thumbnail.save(str(thumbnail_path), 'WEBP', quality=40, method=4)
+        else:
+            thumbnail.save(str(thumbnail_path), 'JPEG', quality=40)
 
         return {
             'id': screenshot_id,
@@ -203,6 +353,9 @@ class ScreenshotService:
         excluded_apps: Optional[list] = None,
         blur_mode: Optional[str] = None,
         quality: Optional[int] = None,
+        retention_days: Optional[int] = None,
+        resolution: Optional[str] = None,
+        format: Optional[str] = None,
     ):
         """Update screenshot settings"""
         if enabled is not None:
@@ -217,6 +370,12 @@ class ScreenshotService:
             self.blur_mode = blur_mode
         if quality is not None:
             self.quality = quality
+        if retention_days is not None:
+            self.retention_days = retention_days
+        if resolution is not None and resolution in self.RESOLUTION_PRESETS:
+            self.resolution = resolution
+        if format is not None and format in ("webp", "jpeg"):
+            self.format = format
 
         # Reschedule with new settings
         self._schedule_next_capture()

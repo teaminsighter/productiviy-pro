@@ -28,11 +28,17 @@ class User(Base):
     # Auth
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
+    is_admin = Column(Boolean, default=False)  # Admin access
+    is_super_admin = Column(Boolean, default=False)  # Super admin access
     auth_provider = Column(String(50), default="email")  # email, google
     google_id = Column(String(255), unique=True, nullable=True)
 
+    # Password Reset
+    password_reset_token = Column(String(255), nullable=True)
+    password_reset_expires = Column(DateTime, nullable=True)
+
     # Subscription
-    plan = Column(Enum(PlanType), default=PlanType.FREE)
+    plan = Column(Enum(PlanType, name='plan_type', create_type=False), default=PlanType.FREE)
     trial_started_at = Column(DateTime, default=datetime.utcnow)
     trial_ends_at = Column(DateTime, default=lambda: datetime.utcnow() + timedelta(days=7))
     subscription_id = Column(String(255), nullable=True)  # Stripe subscription ID
@@ -50,6 +56,7 @@ class User(Base):
 
     # Relations
     user_settings = relationship("UserSettingsNew", back_populates="user", uselist=False)
+    settings = relationship("UserSettings", back_populates="user", uselist=False)
     # Team memberships - use lazy loading to avoid circular imports
     # team_memberships = relationship("TeamMember", back_populates="user")
 
@@ -64,6 +71,12 @@ class User(Base):
     streaks = relationship("Streak", back_populates="user", lazy="dynamic")
     achievements = relationship("Achievement", back_populates="user", lazy="dynamic")
     focus_sessions = relationship("FocusSession", back_populates="user", lazy="dynamic")
+
+    # Integrations
+    integrations = relationship("IntegrationConnection", back_populates="user", lazy="dynamic")
+
+    # Work sessions (for freelancer time tracking)
+    work_sessions = relationship("WorkSession", back_populates="user", lazy="dynamic")
 
     @property
     def is_trial_active(self) -> bool:

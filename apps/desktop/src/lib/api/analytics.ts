@@ -72,13 +72,19 @@ export interface CategoryBreakdown {
 }
 
 export interface TrendData {
+  period?: string;
+  total_time?: number;
+  productivity_score?: number;
   trends: Array<{
-    date: string;
-    productivity_score: number;
-    total_time: number;
-    productive_time: number;
+    date?: string;
+    metric?: string;
+    value?: number;
+    unit?: string;
+    productivity_score?: number;
+    total_time?: number;
+    productive_time?: number;
   }>;
-  insights: string[];
+  insights: Array<string | { type: string; message: string }>;
 }
 
 // API Functions

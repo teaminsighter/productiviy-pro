@@ -10,6 +10,8 @@ interface User {
   is_trial_active: boolean;
   days_left_trial: number;
   has_premium_access: boolean;
+  isAdmin?: boolean;
+  isSuperAdmin?: boolean;
   created_at: string;
 }
 

@@ -34,8 +34,18 @@ def delete_api_key(key_name: str) -> bool:
 
 
 def get_openai_api_key() -> Optional[str]:
-    """Get OpenAI API key from secure storage"""
-    return get_api_key("openai_api_key")
+    """Get OpenAI API key from secure storage or environment"""
+    # First try keyring (secure storage)
+    key = get_api_key("openai_api_key")
+    if key:
+        return key
+
+    # Fallback to environment variable / .env file
+    from app.core.config import settings
+    if settings.openai_api_key:
+        return settings.openai_api_key
+
+    return None
 
 
 def set_openai_api_key(api_key: str) -> bool:

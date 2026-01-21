@@ -1,0 +1,65 @@
+# Productify Pro Backend - Docker Compose for Coolify
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: productify-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # App Settings
+      - DEBUG=${DEBUG:-false}
+      - APP_ENV=${APP_ENV:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # Database (Supabase PostgreSQL)
+      - USE_SQLITE=${USE_SQLITE:-false}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - SUPABASE_DB_URL=${SUPABASE_DB_URL}
+      
+      # Authentication
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      
+      # Firebase Storage
+      - FIREBASE_CREDENTIALS_PATH=/app/firebase-credentials.json
+      - FIREBASE_STORAGE_BUCKET=${FIREBASE_STORAGE_BUCKET}
+      
+      # AI & Integrations
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      
+      # Email
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - FROM_EMAIL=${FROM_EMAIL:-noreply@productifypro.insighter.digital}
+      - FRONTEND_URL=${FRONTEND_URL:-http://productifypro.insighter.digital}
+      
+      # CORS - Allow desktop app and web
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:1420,https://productifypro.insighter.digital,tauri://localhost}
+      
+      # Sentry Error Tracking
+      - SENTRY_DSN=${SENTRY_DSN}
+      
+      # Screenshots (server-side disabled for cloud deployment)
+      - SCREENSHOTS_ENABLED=${SCREENSHOTS_ENABLED:-false}
+    volumes:
+      # Mount Firebase credentials (create this file in Coolify)
+      - ./firebase-credentials.json:/app/firebase-credentials.json:ro
+      # Persistent data storage
+      - productify_data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  productify_data:
+    driver: local

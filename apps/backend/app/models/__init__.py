@@ -14,6 +14,45 @@ from app.models.goals import (
     AchievementType,
     ACHIEVEMENT_DEFINITIONS,
 )
+from app.models.rules import (
+    PlatformRule,
+    URLRule,
+    CustomCategory,
+    WorkSchedule,
+    DEFAULT_PLATFORM_RULES,
+    DEFAULT_CATEGORIES,
+)
+from app.models.calendar import (
+    CalendarConnection,
+    CalendarEvent,
+    CalendarProvider,
+    DeepWorkScore,
+    FocusBlock,
+    FocusSettings,
+)
+from app.models.team import (
+    Team,
+    TeamMember,
+    TeamInvite,
+    TeamPermission,
+    TeamRole,
+    TeamDeepWorkScore,
+    TeamMeetingFreeZone,
+    TeamManagerAlert,
+    TeamSchedulingSuggestion,
+    AlertType,
+    AlertPriority,
+)
+from app.models.integrations import (
+    IntegrationConnection,
+    IntegrationType,
+    IntegrationStatus,
+    GitHubActivity,
+    SlackActivity,
+    DeveloperMetrics,
+    IntegrationWebhook,
+)
+from app.models.work_session import WorkSession
 
 __all__ = [
     "Activity",
@@ -33,4 +72,40 @@ __all__ = [
     "StreakType",
     "AchievementType",
     "ACHIEVEMENT_DEFINITIONS",
+    # Rules
+    "PlatformRule",
+    "URLRule",
+    "CustomCategory",
+    "WorkSchedule",
+    "DEFAULT_PLATFORM_RULES",
+    "DEFAULT_CATEGORIES",
+    # Calendar & Deep Work
+    "CalendarConnection",
+    "CalendarEvent",
+    "CalendarProvider",
+    "DeepWorkScore",
+    "FocusBlock",
+    "FocusSettings",
+    # Teams
+    "Team",
+    "TeamMember",
+    "TeamInvite",
+    "TeamPermission",
+    "TeamRole",
+    "TeamDeepWorkScore",
+    "TeamMeetingFreeZone",
+    "TeamManagerAlert",
+    "TeamSchedulingSuggestion",
+    "AlertType",
+    "AlertPriority",
+    # Integrations
+    "IntegrationConnection",
+    "IntegrationType",
+    "IntegrationStatus",
+    "GitHubActivity",
+    "SlackActivity",
+    "DeveloperMetrics",
+    "IntegrationWebhook",
+    # Work Sessions (Freelancer time tracking)
+    "WorkSession",
 ]

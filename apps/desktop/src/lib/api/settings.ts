@@ -1,58 +1,61 @@
 import apiClient from './client';
 
 // ============================================================================
-// Types
+// Types (camelCase to match backend API response)
 // ============================================================================
 
 export interface GeneralSettings {
   theme: 'dark' | 'light' | 'system';
   language: string;
-  start_on_boot: boolean;
-  start_minimized: boolean;
-  show_in_tray: boolean;
+  startOnBoot: boolean;
+  startMinimized: boolean;
+  showInTray: boolean;
+  closeToTray: boolean;
+  minimizeToTray: boolean;
+  autoUpdate: boolean;
 }
 
 export interface TrackingSettings {
-  enabled: boolean;
-  work_start_time: string;
-  work_end_time: string;
-  work_days: number[];
-  idle_timeout: number;
-  afk_detection: boolean;
+  trackingEnabled: boolean;
+  workStartTime: string;
+  workEndTime: string;
+  workDays: number[];
+  idleTimeout: number;
+  afkDetection: boolean;
 }
 
 export interface ScreenshotSettings {
-  enabled: boolean;
-  interval: number;
-  quality: 'low' | 'medium' | 'high';
-  blur_enabled: boolean;
-  auto_delete_after: number;
-  excluded_apps: string[];
+  screenshotsEnabled: boolean;
+  screenshotInterval: number;
+  screenshotQuality: 'low' | 'medium' | 'high';
+  blurScreenshots: boolean;
+  autoDeleteAfter: number;
+  excludedApps: string[];
 }
 
 export interface AISettings {
-  api_key_set: boolean;
-  api_key_masked: string | null;
-  model: string;
-  auto_analysis: boolean;
-  analysis_frequency: 'hourly' | 'daily' | 'weekly';
+  apiKeySet: boolean;
+  apiKeyMasked: string | null;
+  aiModel: string;
+  autoAnalysis: boolean;
+  analysisFrequency: 'hourly' | 'daily' | 'weekly';
 }
 
 export interface PrivacySettings {
-  incognito_mode: boolean;
-  data_retention_days: number;
-  app_lock_enabled: boolean;
+  incognitoMode: boolean;
+  dataRetentionDays: number;
+  appLockEnabled: boolean;
 }
 
 export interface NotificationSettings {
-  enabled: boolean;
-  productivity_alerts: boolean;
-  break_reminders: boolean;
-  break_interval: number;
-  sound_enabled: boolean;
-  quiet_hours_enabled: boolean;
-  quiet_hours_start: string;
-  quiet_hours_end: string;
+  notificationsEnabled: boolean;
+  productivityAlerts: boolean;
+  breakReminders: boolean;
+  breakInterval: number;
+  soundEnabled: boolean;
+  quietHoursEnabled: boolean;
+  quietHoursStart: string;
+  quietHoursEnd: string;
 }
 
 export interface AllSettings {
@@ -90,6 +93,8 @@ export interface StorageInfo {
   total_mb: number;
   limit_mb: number;
   usage_percent: number;
+  activity_count?: number;
+  screenshot_count?: number;
 }
 
 export interface APIKeyTestResult {
@@ -167,9 +172,9 @@ export async function testAPIKey(apiKey: string): Promise<APIKeyTestResult> {
 }
 
 export async function updateAISettings(settings: {
-  model: string;
-  auto_analysis: boolean;
-  analysis_frequency: string;
+  aiModel: string;
+  autoAnalysis: boolean;
+  analysisFrequency: string;
 }): Promise<{ status: string }> {
   const response = await apiClient.patch('/api/settings/ai', settings);
   return response.data;
@@ -209,26 +214,58 @@ export async function removeFromCustomList(
 // Data Management Functions
 // ============================================================================
 
-export async function exportData(): Promise<{ status: string; download_url: string }> {
-  const response = await apiClient.post('/api/settings/export');
+export interface ExportData {
+  exported_at: string;
+  user: { id: number; email: string; name: string };
+  settings: Record<string, unknown>;
+  activities: Array<Record<string, unknown>>;
+  url_activities: Array<Record<string, unknown>>;
+  youtube_activities: Array<Record<string, unknown>>;
+}
+
+export interface DeleteDataResult {
+  status: string;
+  message: string;
+  deleted: {
+    activities: number;
+    url_activities: number;
+    youtube_activities: number;
+  };
+}
+
+export interface DeleteScreenshotsResult {
+  status: string;
+  message: string;
+  deleted_count: number;
+  freed_mb: number;
+}
+
+export async function exportData(): Promise<ExportData> {
+  const response = await apiClient.get('/api/settings/export');
   return response.data;
 }
 
-export async function downloadExport(): Promise<Blob> {
-  const response = await apiClient.get('/api/settings/export/download', {
-    responseType: 'blob',
-  });
-  return response.data;
+export async function downloadExportAsFile(): Promise<void> {
+  const data = await exportData();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `productify_export_${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
-export async function clearAllData(): Promise<{ status: string }> {
+export async function clearAllData(): Promise<DeleteDataResult> {
   const response = await apiClient.delete('/api/settings/data', {
     params: { confirm: true },
   });
   return response.data;
 }
 
-export async function deleteAllScreenshots(): Promise<{ status: string }> {
+export async function deleteAllScreenshots(): Promise<DeleteScreenshotsResult> {
   const response = await apiClient.delete('/api/settings/screenshots', {
     params: { confirm: true },
   });

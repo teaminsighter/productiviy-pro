@@ -10,26 +10,42 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  Calendar,
+  FileText,
+  Focus,
+  Shield,
+  Briefcase,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useRealTimeActivity } from '@/hooks/useRealTimeActivity';
 import { LiveTimeCompact } from '@/components/common/LiveTimeDisplay';
+import { useAuthStore } from '@/stores/authStore';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+  { icon: Calendar, label: 'Meetings', path: '/meetings' },
   { icon: Activity, label: 'Activity', path: '/activity' },
   { icon: BarChart3, label: 'Analytics', path: '/analytics' },
+  { icon: FileText, label: 'Reports', path: '/reports' },
   { icon: Camera, label: 'Screenshots', path: '/screenshots' },
+  { icon: Briefcase, label: 'Work Sessions', path: '/work-sessions' },
   { icon: Target, label: 'Goals', path: '/goals' },
+  { icon: Focus, label: 'Focus', path: '/focus' },
   { icon: Users, label: 'Team', path: '/team' },
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
+
+const adminNavItem = { icon: Shield, label: 'Admin', path: '/admin' };
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { timeStats, isTracking } = useRealTimeActivity();
+  const { user } = useAuthStore();
+
+  // Include admin item if user is admin
+  const allNavItems = user?.isAdmin ? [...navItems, adminNavItem] : navItems;
 
   return (
     <motion.aside
@@ -96,7 +112,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        {navItems.map((item, index) => {
+        {allNavItems.map((item, index) => {
           const isActive = location.pathname === item.path;
 
           return (

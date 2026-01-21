@@ -142,7 +142,7 @@ export function UserProfile({ size = 'md' }: UserProfileProps) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -10 }}
             transition={{ duration: 0.15 }}
-            className="absolute right-0 top-full mt-2 w-72 glass-card p-0 overflow-hidden z-50"
+            className="absolute right-0 top-full mt-2 w-72 rounded-xl p-0 overflow-hidden z-50 bg-[#1a1a2e] border border-white/10 shadow-2xl"
           >
             {/* User Info Header */}
             <div className="p-4 bg-gradient-to-r from-primary/20 to-secondary/20 border-b border-white/10">

@@ -6,17 +6,77 @@ import {
   Sun, Sunrise, Sunset, Moon, Trophy, Coffee,
   RefreshCw, Timer, FileText, AlertTriangle, Layers
 } from 'lucide-react';
+
+// Mini Sparkline Component for stat cards
+function MiniSparkline({ data, color }: { data: number[]; color: string }) {
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data, 0);
+  const range = max - min || 1;
+
+  const points = data.map((value, index) => {
+    const x = (index / (data.length - 1)) * 100;
+    const y = 100 - ((value - min) / range) * 100;
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <svg
+      className="absolute inset-0 w-full h-full opacity-20"
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+    >
+      <polyline
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        points={points}
+        vectorEffect="non-scaling-stroke"
+      />
+      <linearGradient id={`sparkline-fill-${color}`} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+        <stop offset="100%" stopColor={color} stopOpacity="0" />
+      </linearGradient>
+      <polygon
+        fill={`url(#sparkline-fill-${color})`}
+        points={`0,100 ${points} 100,100`}
+      />
+    </svg>
+  );
+}
 import { Link } from 'react-router-dom';
 import { useRealTimeActivity } from '@/hooks/useRealTimeActivity';
+import { useSettings } from '@/hooks/useSettings';
 import { apiClient } from '@/lib/api/client';
+import { AfkWarningModal } from '@/components/AfkWarningModal';
+import { DeepWorkScoreWidget } from '@/components/deepwork';
+import { FocusAnalytics } from '@/components/focus';
+import { ExtensionPrompt, useExtensionStatus } from '@/components/ExtensionPrompt';
 
 export default function Dashboard() {
+  // Check if extension is installed
+  const { isInstalled: extensionInstalled } = useExtensionStatus();
+  // Get settings for AFK timeout
+  const { data: settings } = useSettings();
+  const afkTimeout = settings?.tracking?.idleTimeout ?? 600; // Default 10 minutes
+  const afkEnabled = settings?.tracking?.afkDetection ?? true;
+
   const {
     currentActivity,
     timeStats,
     isTracking,
-    toggleTracking
-  } = useRealTimeActivity();
+    toggleTracking,
+    // AFK Detection
+    isAfk,
+    afkDuration,
+    showAfkWarning,
+    dismissAfkWarning,
+    resumeFromAfk,
+    // Data source
+    dataSource
+  } = useRealTimeActivity({
+    afkTimeoutSeconds: afkTimeout,
+    afkDetectionEnabled: afkEnabled
+  });
 
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
   const [activitiesLoading, setActivitiesLoading] = useState(true);
@@ -35,15 +95,27 @@ export default function Dashboard() {
     }
 
     fetchRecentActivities();
+
+    // Auto-refresh recent activities every 10 seconds for real-time updates
+    const refreshInterval = setInterval(fetchRecentActivities, 10000);
+    return () => clearInterval(refreshInterval);
   }, []);
 
   const fetchRecentActivities = async () => {
-    setActivitiesLoading(true);
+    // Only show loading on first fetch, not refreshes (prevents flash)
+    if (recentActivities.length === 0) {
+      setActivitiesLoading(true);
+    }
     try {
-      const response = await apiClient.get('/api/activities/recent', { params: { limit: 8 } });
-      setRecentActivities(response.data || []);
+      const response = await apiClient.get('/api/activities/recent', { params: { limit: 5 } });
+      const data = response.data || [];
+      // Only update if we have data (prevents clearing on error)
+      if (data.length > 0 || recentActivities.length === 0) {
+        setRecentActivities(data);
+      }
     } catch (error) {
       console.error('Failed to fetch:', error);
+      // Don't clear existing data on error
     }
     setActivitiesLoading(false);
   };
@@ -69,6 +141,9 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 pb-8">
 
+      {/* Extension Install Prompt - only show if not installed */}
+      {!extensionInstalled && <ExtensionPrompt variant="card" />}
+
       {/* ═══════════════════════════════════════════════════════════
           SECTION 1: HEADER + CURRENT ACTIVITY (TOP PRIORITY)
           ═══════════════════════════════════════════════════════════ */}
@@ -89,71 +164,56 @@ export default function Dashboard() {
           {/* Big Live Time Display */}
           <div className="mb-4">
             <div className="flex items-baseline gap-1">
-              <motion.span
-                key={todayTime.h}
-                initial={{ y: -10, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                className="text-5xl font-bold tabular-nums text-white"
-              >
-                {todayTime.h}
-              </motion.span>
+              <span className="text-5xl font-bold tabular-nums text-white">
+                {String(todayTime.h).padStart(2, '0')}
+              </span>
               <span className="text-2xl text-white/40">h</span>
 
-              <motion.span
-                key={todayTime.m}
-                initial={{ y: -10, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                className="text-5xl font-bold tabular-nums ml-2 text-white"
-              >
+              <span className="text-5xl font-bold tabular-nums ml-2 text-white">
                 {String(todayTime.m).padStart(2, '0')}
-              </motion.span>
+              </span>
               <span className="text-2xl text-white/40">m</span>
 
-              <motion.span
-                key={todayTime.s}
-                initial={{ scale: 1.1 }}
-                animate={{ scale: 1 }}
-                className="text-3xl font-medium text-white/40 tabular-nums ml-2"
-              >
+              <span className="text-3xl font-medium text-white/40 tabular-nums ml-2">
                 {String(todayTime.s).padStart(2, '0')}
-              </motion.span>
+              </span>
               <span className="text-lg text-white/30">s</span>
             </div>
             <p className="text-white/40 text-sm mt-1">Total time today</p>
           </div>
 
-          {/* Productivity Ring */}
-          <div className="flex items-center gap-4">
-            <div className="relative w-16 h-16">
-              <svg className="w-16 h-16 -rotate-90">
+          {/* Productivity Ring - Fixed positioning */}
+          <div className="flex items-center gap-4 mt-2">
+            <div className="relative w-20 h-20 flex-shrink-0">
+              <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
                 <circle
-                  cx="32" cy="32" r="28"
+                  cx="40" cy="40" r="34"
                   stroke="currentColor"
-                  strokeWidth="6"
+                  strokeWidth="8"
                   fill="none"
                   className="text-white/10"
                 />
                 <motion.circle
-                  cx="32" cy="32" r="28"
+                  cx="40" cy="40" r="34"
                   stroke="currentColor"
-                  strokeWidth="6"
+                  strokeWidth="8"
                   fill="none"
                   strokeLinecap="round"
                   className="text-green-500"
-                  initial={{ strokeDasharray: '0 176' }}
+                  initial={{ strokeDasharray: '0 214' }}
                   animate={{
-                    strokeDasharray: `${(timeStats.productivity / 100) * 176} 176`
+                    strokeDasharray: `${(timeStats.productivity / 100) * 214} 214`
                   }}
                   transition={{ duration: 1, ease: 'easeOut' }}
                 />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-lg font-bold text-white">{timeStats.productivity}%</span>
+                <span className="text-xl font-bold text-white">{timeStats.productivity}%</span>
               </div>
             </div>
             <div>
-              <p className="font-medium text-white">Productivity</p>
-              <p className="text-sm text-white/40">
+              <p className="font-semibold text-white">Productivity</p>
+              <p className="text-sm text-white/50">
                 {formatDuration(timeStats.today_productive)} productive
               </p>
             </div>
@@ -171,52 +231,53 @@ export default function Dashboard() {
             activity={currentActivity}
             isTracking={isTracking}
             onToggle={toggleTracking}
+            dataSource={dataSource}
           />
         </motion.div>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════
-          SECTION 2: TIME STATS ROW
+          SECTION 2: TIME STATS ROW (5 Cards with Sparklines)
           ═══════════════════════════════════════════════════════════ */}
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="grid grid-cols-2 lg:grid-cols-4 gap-4"
+        className="grid grid-cols-2 lg:grid-cols-5 gap-4"
       >
         <StatCard
           icon={<Zap className="w-5 h-5" />}
-          label="Productive Today"
+          label="Productive"
           value={formatDuration(timeStats.today_productive)}
           subtext={`${timeStats.productivity}% of total`}
           color="green"
+          sparklineData={[30, 45, 60, 55, 70, 65, 80, timeStats.productivity]}
         />
         <StatCard
           icon={<Calendar className="w-5 h-5" />}
           label="This Week"
           value={formatDuration(timeStats.week_total)}
-          subtext={`${Math.round(timeStats.week_total / 3600 / 7 * 10) / 10}h daily avg`}
+          subtext={`${Math.round(timeStats.week_total / 3600 / 7 * 10) / 10}h avg`}
           color="purple"
+          sparklineData={[20, 35, 45, 55, 50, 60, 55]}
         />
-        {/* Distraction & AFK Split Card */}
-        <motion.div
-          whileHover={{ scale: 1.02, y: -2 }}
-          className="p-4 rounded-2xl border bg-gradient-to-br from-red-500/20 to-orange-600/5 border-red-500/20 transition-all cursor-default"
-        >
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <AlertTriangle className="w-5 h-5 text-red-400 mb-2" />
-              <p className="text-xl font-bold text-white">{formatDuration(timeStats.distracting_time || 0)}</p>
-              <p className="text-xs text-white/50">Distraction</p>
-            </div>
-            <div>
-              <Coffee className="w-5 h-5 text-orange-400 mb-2" />
-              <p className="text-xl font-bold text-white">{formatDuration(timeStats.afk_time || 0)}</p>
-              <p className="text-xs text-white/50">Neutral/AFK</p>
-            </div>
-          </div>
-        </motion.div>
+        <StatCard
+          icon={<AlertTriangle className="w-5 h-5" />}
+          label="Distraction"
+          value={formatDuration(timeStats.distracting_time || 0)}
+          subtext="Time lost"
+          color="red"
+          sparklineData={[10, 15, 25, 20, 30, 25, 15]}
+        />
+        <StatCard
+          icon={<Coffee className="w-5 h-5" />}
+          label="AFK/Neutral"
+          value={formatDuration(timeStats.afk_time || 0)}
+          subtext="Away time"
+          color="orange"
+          sparklineData={[15, 20, 10, 25, 15, 30, 20]}
+        />
         <StatCard
           icon={<Target className="w-5 h-5" />}
           label="Focus Score"
@@ -224,6 +285,7 @@ export default function Dashboard() {
           subtext={timeStats.productivity >= 70 ? 'Excellent!' : 'Keep going'}
           color="indigo"
           highlight={timeStats.productivity >= 70}
+          sparklineData={[40, 55, 60, 65, 70, 75, timeStats.productivity]}
         />
       </motion.div>
 
@@ -263,40 +325,60 @@ export default function Dashboard() {
             </div>
 
             <div className="divide-y divide-white/5">
-              {activitiesLoading ? (
-                // Skeleton
+              {activitiesLoading && recentActivities.length === 0 ? (
+                // Skeleton - only show on initial load
                 Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="px-5 py-3 flex items-center gap-4 animate-pulse">
+                  <div key={i} className="px-5 py-3.5 flex items-center gap-4 animate-pulse">
                     <div className="w-10 h-10 rounded-xl bg-white/10" />
                     <div className="flex-1">
                       <div className="h-4 bg-white/10 rounded w-32 mb-2" />
                       <div className="h-3 bg-white/5 rounded w-48" />
                     </div>
-                    <div className="h-4 bg-white/10 rounded w-12" />
+                    <div className="h-5 bg-white/10 rounded-lg w-20" />
+                    <div className="w-16 text-right">
+                      <div className="h-4 bg-white/10 rounded w-12 ml-auto mb-1" />
+                      <div className="h-2 bg-white/5 rounded w-10 ml-auto" />
+                    </div>
                   </div>
                 ))
               ) : recentActivities.length > 0 ? (
-                recentActivities.map((activity, index) => (
+                // Show activities (limit to 5)
+                recentActivities.slice(0, 5).map((activity, index) => (
                   <ActivityRow key={activity.id || index} activity={activity} index={index} />
                 ))
               ) : (
-                <div className="px-5 py-12 text-center text-white/40">
-                  <Monitor className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                  <p>No activity yet</p>
-                  <p className="text-sm">Start using apps to track</p>
+                // Empty state
+                <div className="px-5 py-16 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-4">
+                    <Monitor className="w-8 h-8 text-white/20" />
+                  </div>
+                  <p className="text-white/60 font-medium mb-1">No activity yet</p>
+                  <p className="text-sm text-white/30">Start using apps to begin tracking your time</p>
                 </div>
               )}
             </div>
           </div>
         </motion.div>
 
-        {/* Right Sidebar: Top Platforms/Websites + Quick Actions */}
+        {/* Right Sidebar: Deep Work Score + Top Platforms + Quick Actions */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
           className="space-y-6"
         >
+          {/* Deep Work Score Widget */}
+          <DeepWorkScoreWidget compact />
+
+          {/* Focus Analytics Widget */}
+          <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
+            <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
+              <Timer className="w-4 h-4 text-indigo-400" />
+              Focus Mode
+            </h3>
+            <FocusAnalytics days={7} compact />
+          </div>
+
           {/* Top Platforms/Websites Box */}
           <TopPlatformsWebsites formatDuration={formatDuration} />
 
@@ -335,6 +417,15 @@ export default function Dashboard() {
           </div>
         </motion.div>
       </div>
+
+      {/* AFK Warning Modal */}
+      <AfkWarningModal
+        isVisible={showAfkWarning}
+        afkDuration={afkDuration}
+        isAutoPaused={!isTracking && isAfk}
+        onDismiss={dismissAfkWarning}
+        onResume={resumeFromAfk}
+      />
     </div>
   );
 }
@@ -347,58 +438,79 @@ export default function Dashboard() {
 function CurrentActivityHero({
   activity,
   isTracking,
-  onToggle
+  onToggle,
+  dataSource
 }: {
   activity: any;
   isTracking: boolean;
   onToggle: () => void;
+  dataSource: 'native' | 'activitywatch' | 'mock' | 'none';
 }) {
-  const [elapsed, setElapsed] = useState(activity?.duration || 0);
+  const [elapsed, setElapsed] = useState(0);
+  const [lastActivity, setLastActivity] = useState<string | null>(null);
+  const [sessionStart, setSessionStart] = useState<number>(Date.now());
 
+  // Reset timer when activity changes (new app/window)
   useEffect(() => {
-    if (activity) setElapsed(activity.duration);
-  }, [activity?.duration]);
+    if (activity) {
+      const activityKey = `${activity.app_name}:${activity.title}`;
+      if (lastActivity !== activityKey) {
+        // Activity changed - reset timer
+        setLastActivity(activityKey);
+        setSessionStart(Date.now());
+        setElapsed(0);
+      }
+    }
+  }, [activity?.app_name, activity?.title, lastActivity]);
 
+  // Count up every second
   useEffect(() => {
     if (isTracking && activity) {
       const interval = setInterval(() => {
-        setElapsed((e: number) => e + 1);
+        const now = Date.now();
+        const secondsSinceStart = Math.floor((now - sessionStart) / 1000);
+        setElapsed(secondsSinceStart);
       }, 1000);
       return () => clearInterval(interval);
     }
-  }, [isTracking, activity]);
+  }, [isTracking, activity, sessionStart]);
 
   const formatElapsed = (s: number) => {
-    const m = Math.floor(s / 60);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
     const sec = s % 60;
+    if (h > 0) {
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    }
     return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   };
 
-  const getCategoryGradient = (category: string) => {
-    const gradients: Record<string, string> = {
-      development: 'from-blue-500 to-cyan-400',
-      design: 'from-purple-500 to-pink-400',
-      productivity: 'from-indigo-500 to-violet-400',
-      communication: 'from-green-500 to-emerald-400',
-      entertainment: 'from-red-500 to-orange-400',
-      browsing: 'from-yellow-500 to-amber-400',
-      social: 'from-pink-500 to-rose-400',
+  // Solid colors for categories (no gradients)
+  const getCategoryColor = (category: string) => {
+    const colors: Record<string, string> = {
+      development: 'bg-blue-500',
+      design: 'bg-purple-500',
+      productivity: 'bg-indigo-500',
+      communication: 'bg-green-500',
+      entertainment: 'bg-red-500',
+      browsing: 'bg-yellow-500',
+      social: 'bg-pink-500',
     };
-    return gradients[category?.toLowerCase()] || 'from-gray-500 to-gray-400';
+    return colors[category?.toLowerCase()] || 'bg-gray-500';
   };
 
   return (
     <div className={`
       relative overflow-hidden rounded-2xl p-6
       ${isTracking
-        ? 'bg-gradient-to-br from-white/10 to-white/5 border border-green-500/30'
+        ? 'bg-white/10 border border-green-500/30'
         : 'bg-white/5 border border-white/10'
       }
     `}>
-      {/* Animated background when tracking */}
+      {/* Animated background when tracking (solid color) */}
       {isTracking && activity && (
         <motion.div
-          className={`absolute inset-0 bg-gradient-to-r ${getCategoryGradient(activity.category)} opacity-5`}
+          className={`absolute inset-0 ${getCategoryColor(activity.category)} opacity-5`}
           animate={{ opacity: [0.03, 0.08, 0.03] }}
           transition={{ duration: 3, repeat: Infinity }}
         />
@@ -422,6 +534,22 @@ function CurrentActivityHero({
             <span className={`text-sm font-medium ${isTracking ? 'text-green-400' : 'text-white/40'}`}>
               {isTracking ? 'Tracking Active' : 'Tracking Paused'}
             </span>
+            {/* Data Source Indicator */}
+            {dataSource === 'mock' && (
+              <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                Demo Mode
+              </span>
+            )}
+            {dataSource === 'native' && (
+              <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-green-500/20 text-green-400 border border-green-500/30">
+                Live
+              </span>
+            )}
+            {dataSource === 'activitywatch' && (
+              <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                ActivityWatch
+              </span>
+            )}
           </div>
 
           {/* Toggle Button */}
@@ -452,10 +580,10 @@ function CurrentActivityHero({
               exit={{ opacity: 0, y: -10 }}
               className="flex items-start gap-5"
             >
-              {/* App Icon */}
+              {/* App Icon (solid color) */}
               <div className={`
                 w-16 h-16 rounded-2xl flex items-center justify-center
-                bg-gradient-to-br ${getCategoryGradient(activity.category)}
+                ${getCategoryColor(activity.category)}
                 shadow-lg
               `}>
                 {activity.app_name?.toLowerCase().includes('chrome') ||
@@ -527,14 +655,15 @@ function CurrentActivityHero({
   );
 }
 
-// Stat Card Component
+// Stat Card Component with Sparkline (No Gradients - Solid Colors)
 function StatCard({
   icon,
   label,
   value,
   subtext,
   color,
-  highlight
+  highlight,
+  sparklineData = []
 }: {
   icon: React.ReactNode;
   label: string;
@@ -542,38 +671,50 @@ function StatCard({
   subtext: string;
   color: 'green' | 'purple' | 'pink' | 'indigo' | 'blue' | 'orange' | 'red';
   highlight?: boolean;
+  sparklineData?: number[];
 }) {
-  const colorClasses = {
-    green: 'from-green-500/20 to-green-600/5 border-green-500/20 text-green-400',
-    purple: 'from-purple-500/20 to-purple-600/5 border-purple-500/20 text-purple-400',
-    pink: 'from-pink-500/20 to-pink-600/5 border-pink-500/20 text-pink-400',
-    indigo: 'from-indigo-500/20 to-indigo-600/5 border-indigo-500/20 text-indigo-400',
-    blue: 'from-blue-500/20 to-blue-600/5 border-blue-500/20 text-blue-400',
-    orange: 'from-orange-500/20 to-orange-600/5 border-orange-500/20 text-orange-400',
-    red: 'from-red-500/20 to-red-600/5 border-red-500/20 text-red-400',
+  // Solid background colors (no gradients)
+  const colorConfig = {
+    green: { bg: 'bg-green-500/15', border: 'border-green-500/30', text: 'text-green-400', hex: '#22c55e' },
+    purple: { bg: 'bg-purple-500/15', border: 'border-purple-500/30', text: 'text-purple-400', hex: '#a855f7' },
+    pink: { bg: 'bg-pink-500/15', border: 'border-pink-500/30', text: 'text-pink-400', hex: '#ec4899' },
+    indigo: { bg: 'bg-indigo-500/15', border: 'border-indigo-500/30', text: 'text-indigo-400', hex: '#6366f1' },
+    blue: { bg: 'bg-blue-500/15', border: 'border-blue-500/30', text: 'text-blue-400', hex: '#3b82f6' },
+    orange: { bg: 'bg-orange-500/15', border: 'border-orange-500/30', text: 'text-orange-400', hex: '#f97316' },
+    red: { bg: 'bg-red-500/15', border: 'border-red-500/30', text: 'text-red-400', hex: '#ef4444' },
   };
+
+  const config = colorConfig[color];
 
   return (
     <motion.div
       whileHover={{ scale: 1.02, y: -2 }}
       className={`
-        p-4 rounded-2xl border bg-gradient-to-br transition-all cursor-default
-        ${colorClasses[color]}
+        relative overflow-hidden p-4 rounded-2xl border transition-all cursor-default
+        ${config.bg} ${config.border}
         ${highlight ? 'ring-2 ring-yellow-500/50' : ''}
       `}
     >
-      <div className={`mb-3 ${colorClasses[color].split(' ').pop()}`}>
-        {icon}
-      </div>
-      <p className="text-2xl font-bold text-white mb-0.5">{value}</p>
-      <p className="text-sm text-white/50">{label}</p>
-      <p className="text-xs text-white/30 mt-1">{subtext}</p>
-
-      {highlight && (
-        <div className="mt-2">
-          <Trophy className="w-4 h-4 text-yellow-400 inline" />
-        </div>
+      {/* Sparkline Background */}
+      {sparklineData.length > 0 && (
+        <MiniSparkline data={sparklineData} color={config.hex} />
       )}
+
+      {/* Content */}
+      <div className="relative z-10">
+        <div className={`mb-2 ${config.text}`}>
+          {icon}
+        </div>
+        <p className="text-2xl font-bold text-white mb-0.5">{value}</p>
+        <p className="text-sm text-white/60">{label}</p>
+        <p className="text-xs text-white/40 mt-1">{subtext}</p>
+
+        {highlight && (
+          <div className="mt-2">
+            <Trophy className="w-4 h-4 text-yellow-400 inline" />
+          </div>
+        )}
+      </div>
     </motion.div>
   );
 }
@@ -582,49 +723,95 @@ function StatCard({
 function ActivityRow({ activity, index }: { activity: any; index: number }) {
   const formatDuration = (s: number) => {
     if (!s) return '0s';
-    const m = Math.floor(s / 60);
-    if (m > 0) return `${m}m`;
-    return `${s}s`;
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${sec}s`;
+    return `${sec}s`;
   };
+
+  const formatTimeAgo = (timestamp: string) => {
+    if (!timestamp) return '';
+    const now = new Date();
+    // API returns UTC timestamps without timezone indicator - add 'Z' to parse as UTC
+    const utcTimestamp = timestamp.includes('Z') || timestamp.includes('+') ? timestamp : timestamp + 'Z';
+    const time = new Date(utcTimestamp);
+    const diff = Math.floor((now.getTime() - time.getTime()) / 1000);
+
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return time.toLocaleDateString();
+  };
+
+  // Category colors
+  const getCategoryStyle = (category: string) => {
+    const styles: Record<string, { bg: string; text: string }> = {
+      development: { bg: 'bg-blue-500/15', text: 'text-blue-400' },
+      design: { bg: 'bg-purple-500/15', text: 'text-purple-400' },
+      productivity: { bg: 'bg-indigo-500/15', text: 'text-indigo-400' },
+      communication: { bg: 'bg-green-500/15', text: 'text-green-400' },
+      browsing: { bg: 'bg-yellow-500/15', text: 'text-yellow-400' },
+      video: { bg: 'bg-red-500/15', text: 'text-red-400' },
+      entertainment: { bg: 'bg-pink-500/15', text: 'text-pink-400' },
+      music: { bg: 'bg-emerald-500/15', text: 'text-emerald-400' },
+      system: { bg: 'bg-gray-500/15', text: 'text-gray-400' },
+    };
+    return styles[category?.toLowerCase()] || { bg: 'bg-white/10', text: 'text-white/50' };
+  };
+
+  const categoryStyle = getCategoryStyle(activity.category);
 
   return (
     <motion.div
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.03 }}
-      className="px-5 py-3 flex items-center gap-4 hover:bg-white/5 transition-colors group"
+      transition={{ delay: index * 0.05 }}
+      className="px-5 py-3.5 flex items-center gap-4 hover:bg-white/5 transition-all cursor-default group"
     >
-      {/* Icon */}
+      {/* App Icon */}
       <div className={`
-        w-10 h-10 rounded-xl flex items-center justify-center
+        w-10 h-10 rounded-xl flex items-center justify-center shrink-0
         ${activity.is_productive
-          ? 'bg-green-500/20 text-green-400'
-          : 'bg-white/10 text-white/40'
+          ? 'bg-gradient-to-br from-green-500/20 to-emerald-500/20 text-green-400'
+          : `${categoryStyle.bg} ${categoryStyle.text}`
         }
       `}>
         <Monitor className="w-5 h-5" />
       </div>
 
-      {/* Info */}
+      {/* App Info */}
       <div className="flex-1 min-w-0">
-        <p className="font-medium truncate text-sm text-white">{activity.app_name || 'Unknown'}</p>
-        <p className="text-xs text-white/40 truncate">{activity.title || '-'}</p>
+        <div className="flex items-center gap-2">
+          <p className="font-medium truncate text-sm text-white">
+            {activity.app_name || 'Unknown'}
+          </p>
+          {activity.is_productive && (
+            <Zap className="w-3 h-3 text-green-400 shrink-0" />
+          )}
+        </div>
+        <p className="text-xs text-white/40 truncate mt-0.5">
+          {activity.title || 'No title'}
+        </p>
       </div>
 
-      {/* Duration + Category */}
-      <div className="flex items-center gap-3">
-        <span className={`
-          px-2 py-0.5 rounded-md text-xs capitalize
-          ${activity.is_productive
-            ? 'bg-green-500/10 text-green-400'
-            : 'bg-white/10 text-white/40'
-          }
-        `}>
-          {activity.category || 'Other'}
-        </span>
-        <span className="text-sm font-medium text-white/60 w-12 text-right">
+      {/* Category Badge */}
+      <span className={`
+        px-2.5 py-1 rounded-lg text-xs font-medium capitalize shrink-0
+        ${categoryStyle.bg} ${categoryStyle.text}
+      `}>
+        {activity.category || 'Other'}
+      </span>
+
+      {/* Duration */}
+      <div className="text-right shrink-0 w-16">
+        <p className="text-sm font-semibold text-white">
           {formatDuration(activity.duration)}
-        </span>
+        </p>
+        <p className="text-[10px] text-white/30">
+          {formatTimeAgo(activity.timestamp)}
+        </p>
       </div>
     </motion.div>
   );

@@ -1,0 +1,1 @@
+export { DeepWorkScoreWidget } from './DeepWorkScoreWidget';

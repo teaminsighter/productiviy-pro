@@ -76,33 +76,33 @@ export function WeeklyReportModal({ isOpen, onClose, weekOffset = 0 }: WeeklyRep
               <div class="metric-label">Average Productivity</div>
             </div>
             <div class="metric">
-              <div class="metric-value">${report.total_productive_hours.toFixed(1)}h</div>
+              <div class="metric-value">${(report.total_productive_hours ?? 0).toFixed(1)}h</div>
               <div class="metric-label">Productive Hours</div>
             </div>
             <div class="metric">
-              <div class="metric-value">${report.total_tracked_hours.toFixed(1)}h</div>
+              <div class="metric-value">${(report.total_tracked_hours ?? 0).toFixed(1)}h</div>
               <div class="metric-label">Total Tracked</div>
             </div>
           </div>
 
           <h2>Key Achievements</h2>
           <ul>
-            ${report.achievements.map(a => `<li>${a}</li>`).join('')}
+            ${(report.achievements ?? []).map(a => `<li>${a}</li>`).join('')}
           </ul>
 
           <h2>Areas for Improvement</h2>
           <ul>
-            ${report.challenges.map(c => `<li>${c}</li>`).join('')}
+            ${(report.challenges ?? []).map(c => `<li>${c}</li>`).join('')}
           </ul>
 
           <h2>Trends</h2>
           <ul>
-            ${report.trends.map(t => `<li class="${t.direction === 'up' ? 'trend-up' : t.direction === 'down' ? 'trend-down' : ''}">${t.metric}: ${t.change > 0 ? '+' : ''}${t.change}% ${t.insight}</li>`).join('')}
+            ${(report.trends ?? []).map(t => `<li class="${t.direction === 'up' ? 'trend-up' : t.direction === 'down' ? 'trend-down' : ''}">${t.metric}: ${(t.change ?? 0) > 0 ? '+' : ''}${t.change ?? 0}% ${t.insight ?? ''}</li>`).join('')}
           </ul>
 
           <h2>Next Week's Goals</h2>
           <ul>
-            ${report.goals.map(g => `<li><strong>${g.title}</strong>: ${g.description}</li>`).join('')}
+            ${(report.goals ?? []).map(g => `<li><strong>${g.title}</strong>: ${g.description}</li>`).join('')}
           </ul>
 
           <div class="footer">
@@ -120,7 +120,7 @@ export function WeeklyReportModal({ isOpen, onClose, weekOffset = 0 }: WeeklyRep
   const handleShare = async () => {
     if (!report) return;
 
-    const shareText = `Weekly Productivity Report (${report.week_start} to ${report.week_end})\n\n${report.executive_summary}\n\nProductivity Score: ${Math.round(report.average_productivity_score)}%\nProductive Hours: ${report.total_productive_hours.toFixed(1)}h`;
+    const shareText = `Weekly Productivity Report (${report.week_start} to ${report.week_end})\n\n${report.executive_summary}\n\nProductivity Score: ${Math.round(report.average_productivity_score ?? 0)}%\nProductive Hours: ${(report.total_productive_hours ?? 0).toFixed(1)}h`;
 
     if (navigator.share) {
       try {
@@ -273,18 +273,18 @@ export function WeeklyReportModal({ isOpen, onClose, weekOffset = 0 }: WeeklyRep
                             <MetricCard
                               icon={<BarChart3 className="text-accent" size={20} />}
                               label="Avg. Productivity"
-                              value={`${Math.round(report.average_productivity_score)}%`}
+                              value={`${Math.round(report.average_productivity_score ?? 0)}%`}
                               trend={report.productivity_trend}
                             />
                             <MetricCard
                               icon={<Clock className="text-blue-400" size={20} />}
                               label="Productive Hours"
-                              value={`${report.total_productive_hours.toFixed(1)}h`}
+                              value={`${(report.total_productive_hours ?? 0).toFixed(1)}h`}
                             />
                             <MetricCard
                               icon={<Calendar className="text-purple-400" size={20} />}
                               label="Total Tracked"
-                              value={`${report.total_tracked_hours.toFixed(1)}h`}
+                              value={`${(report.total_tracked_hours ?? 0).toFixed(1)}h`}
                             />
                             <MetricCard
                               icon={<Zap className="text-yellow-400" size={20} />}
@@ -301,7 +301,7 @@ export function WeeklyReportModal({ isOpen, onClose, weekOffset = 0 }: WeeklyRep
                                 <h4 className="text-white font-medium">Key Achievements</h4>
                               </div>
                               <ul className="space-y-2">
-                                {report.achievements.map((achievement, index) => (
+                                {(report.achievements ?? []).map((achievement, index) => (
                                   <motion.li
                                     key={index}
                                     initial={{ opacity: 0, x: -10 }}
@@ -313,6 +313,9 @@ export function WeeklyReportModal({ isOpen, onClose, weekOffset = 0 }: WeeklyRep
                                     <span className="text-white/80">{achievement}</span>
                                   </motion.li>
                                 ))}
+                                {(!report.achievements || report.achievements.length === 0) && (
+                                  <li className="text-white/40 text-sm">No achievements recorded</li>
+                                )}
                               </ul>
                             </div>
 
@@ -322,7 +325,7 @@ export function WeeklyReportModal({ isOpen, onClose, weekOffset = 0 }: WeeklyRep
                                 <h4 className="text-white font-medium">Challenges</h4>
                               </div>
                               <ul className="space-y-2">
-                                {report.challenges.map((challenge, index) => (
+                                {(report.challenges ?? []).map((challenge, index) => (
                                   <motion.li
                                     key={index}
                                     initial={{ opacity: 0, x: -10 }}
@@ -334,6 +337,9 @@ export function WeeklyReportModal({ isOpen, onClose, weekOffset = 0 }: WeeklyRep
                                     <span className="text-white/80">{challenge}</span>
                                   </motion.li>
                                 ))}
+                                {(!report.challenges || report.challenges.length === 0) && (
+                                  <li className="text-white/40 text-sm">No challenges recorded</li>
+                                )}
                               </ul>
                             </div>
                           </div>
@@ -362,34 +368,38 @@ export function WeeklyReportModal({ isOpen, onClose, weekOffset = 0 }: WeeklyRep
                           <h3 className="text-white font-medium">Weekly Trends</h3>
 
                           <div className="grid gap-4">
-                            {report.trends.map((trend, index) => (
-                              <motion.div
-                                key={index}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: index * 0.1 }}
-                                className="glass-card p-4"
-                              >
-                                <div className="flex items-center justify-between mb-2">
-                                  <span className="text-white font-medium">{trend.metric}</span>
-                                  <div className={`flex items-center gap-1 ${
-                                    trend.direction === 'up' ? 'text-productive' :
-                                    trend.direction === 'down' ? 'text-red-400' :
-                                    'text-white/50'
-                                  }`}>
-                                    {trend.direction === 'up' ? (
-                                      <TrendingUp size={16} />
-                                    ) : trend.direction === 'down' ? (
-                                      <TrendingDown size={16} />
-                                    ) : null}
-                                    <span className="font-semibold">
-                                      {trend.change > 0 ? '+' : ''}{trend.change}%
-                                    </span>
+                            {(report.trends ?? []).length > 0 ? (
+                              (report.trends ?? []).map((trend, index) => (
+                                <motion.div
+                                  key={index}
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{ delay: index * 0.1 }}
+                                  className="glass-card p-4"
+                                >
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-white font-medium">{trend.metric}</span>
+                                    <div className={`flex items-center gap-1 ${
+                                      trend.direction === 'up' ? 'text-productive' :
+                                      trend.direction === 'down' ? 'text-red-400' :
+                                      'text-white/50'
+                                    }`}>
+                                      {trend.direction === 'up' ? (
+                                        <TrendingUp size={16} />
+                                      ) : trend.direction === 'down' ? (
+                                        <TrendingDown size={16} />
+                                      ) : null}
+                                      <span className="font-semibold">
+                                        {(trend.change ?? 0) > 0 ? '+' : ''}{trend.change ?? 0}%
+                                      </span>
+                                    </div>
                                   </div>
-                                </div>
-                                <p className="text-white/60 text-sm">{trend.insight}</p>
-                              </motion.div>
-                            ))}
+                                  <p className="text-white/60 text-sm">{trend.insight}</p>
+                                </motion.div>
+                              ))
+                            ) : (
+                              <div className="text-white/40 text-center py-8">No trends available</div>
+                            )}
                           </div>
 
                           {/* Comparison */}
@@ -413,40 +423,44 @@ export function WeeklyReportModal({ isOpen, onClose, weekOffset = 0 }: WeeklyRep
                           <h3 className="text-white font-medium">Goals for Next Week</h3>
 
                           <div className="grid gap-4">
-                            {report.goals.map((goal, index) => (
-                              <motion.div
-                                key={index}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: index * 0.1 }}
-                                className="glass-card p-5"
-                              >
-                                <div className="flex items-start gap-4">
-                                  <div className="p-2 rounded-lg bg-accent/20 text-accent">
-                                    <Target size={20} />
-                                  </div>
-                                  <div className="flex-1">
-                                    <h4 className="text-white font-medium mb-1">{goal.title}</h4>
-                                    <p className="text-white/60 text-sm mb-3">{goal.description}</p>
-                                    {goal.target && (
-                                      <div className="flex items-center gap-2 text-sm">
-                                        <span className="text-white/40">Target:</span>
-                                        <span className="text-accent font-medium">{goal.target}</span>
-                                      </div>
+                            {(report.goals ?? []).length > 0 ? (
+                              (report.goals ?? []).map((goal, index) => (
+                                <motion.div
+                                  key={index}
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{ delay: index * 0.1 }}
+                                  className="glass-card p-5"
+                                >
+                                  <div className="flex items-start gap-4">
+                                    <div className="p-2 rounded-lg bg-accent/20 text-accent">
+                                      <Target size={20} />
+                                    </div>
+                                    <div className="flex-1">
+                                      <h4 className="text-white font-medium mb-1">{goal.title}</h4>
+                                      <p className="text-white/60 text-sm mb-3">{goal.description}</p>
+                                      {goal.target && (
+                                        <div className="flex items-center gap-2 text-sm">
+                                          <span className="text-white/40">Target:</span>
+                                          <span className="text-accent font-medium">{goal.target}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    {goal.priority && (
+                                      <span className={`px-2 py-1 rounded-full text-xs ${
+                                        goal.priority === 'high' ? 'bg-red-500/20 text-red-400' :
+                                        goal.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                                        'bg-green-500/20 text-green-400'
+                                      }`}>
+                                        {goal.priority}
+                                      </span>
                                     )}
                                   </div>
-                                  {goal.priority && (
-                                    <span className={`px-2 py-1 rounded-full text-xs ${
-                                      goal.priority === 'high' ? 'bg-red-500/20 text-red-400' :
-                                      goal.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                                      'bg-green-500/20 text-green-400'
-                                    }`}>
-                                      {goal.priority}
-                                    </span>
-                                  )}
-                                </div>
-                              </motion.div>
-                            ))}
+                                </motion.div>
+                              ))
+                            ) : (
+                              <div className="text-white/40 text-center py-8">No goals set yet</div>
+                            )}
                           </div>
 
                           {/* Recommendations */}

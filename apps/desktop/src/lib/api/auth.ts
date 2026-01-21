@@ -23,6 +23,8 @@ export interface AuthResponse {
     is_trial_active: boolean;
     days_left_trial: number;
     has_premium_access: boolean;
+    is_admin: boolean;
+    is_super_admin: boolean;
     created_at: string;
   };
 }
@@ -54,6 +56,19 @@ export const authApi = {
 
   googleAuth: async (token: string): Promise<AuthResponse> => {
     const response = await apiClient.post('/api/auth/google', { token });
+    return response.data;
+  },
+
+  updateProfile: async (data: { name?: string; avatar_url?: string }): Promise<AuthResponse['user']> => {
+    const response = await apiClient.patch('/api/auth/me', data);
+    return response.data;
+  },
+
+  changePassword: async (currentPassword: string, newPassword: string): Promise<{ message: string }> => {
+    const response = await apiClient.post('/api/auth/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
     return response.data;
   },
 };

@@ -38,3 +38,12 @@ export * from './goals';
 
 // Auth API
 export * from './auth';
+
+// Calendar API
+export * from './calendar';
+
+// Deep Work API
+export * from './deepwork';
+
+// Reports API
+export * from './reports';

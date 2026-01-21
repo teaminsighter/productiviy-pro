@@ -29,12 +29,12 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
 
   return (
     <div className="text-center">
-      {/* Logo Animation */}
+      {/* Logo Animation (solid color) */}
       <motion.div
         initial={{ scale: 0, rotate: -180 }}
         animate={{ scale: 1, rotate: 0 }}
         transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-        className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-accent to-purple-500 flex items-center justify-center shadow-2xl shadow-accent/30"
+        className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-accent flex items-center justify-center shadow-2xl shadow-accent/30"
       >
         <Sparkles className="text-white" size={48} />
       </motion.div>
@@ -82,18 +82,23 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
         ))}
       </motion.div>
 
-      {/* CTA Button */}
+      {/* CTA Button - Glass green 3D button */}
       <motion.button
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.8 }}
-        whileHover={{ scale: 1.05, y: -2 }}
-        whileTap={{ scale: 0.95 }}
+        whileHover={{ scale: 1.02, y: -3 }}
+        whileTap={{ scale: 0.98, y: 0 }}
         onClick={onNext}
-        className="relative px-10 py-4 text-lg font-bold text-white bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-xl shadow-2xl transform transition-all duration-300 hover:shadow-[0_0_40px_rgba(99,102,241,0.5)] active:scale-95 group"
+        className="px-12 py-4 text-lg font-bold text-white rounded-2xl transition-all duration-200 group"
+        style={{
+          background: 'rgba(16, 185, 129, 0.85)',
+          backdropFilter: 'blur(12px)',
+          boxShadow: '0 8px 32px rgba(16, 185, 129, 0.35), 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.2), inset 0 -2px 4px rgba(0, 0, 0, 0.15)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+        }}
       >
-        <span className="absolute inset-0 rounded-xl bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300 -z-10 blur-xl"></span>
-        <span className="flex items-center gap-2">
+        <span className="flex items-center gap-3">
           Get Started
           <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
         </span>

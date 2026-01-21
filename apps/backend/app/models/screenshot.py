@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, Integer, ForeignKey
+from sqlalchemy import Column, String, Boolean, DateTime, Integer, ForeignKey, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -7,10 +7,16 @@ import uuid
 
 class Screenshot(Base):
     __tablename__ = "screenshots"
+    __table_args__ = (
+        # Composite index for user screenshot queries by date
+        Index("ix_screenshots_user_time", "user_id", "timestamp"),
+        # Index for filtering deleted screenshots
+        Index("ix_screenshots_user_deleted", "user_id", "is_deleted"),
+    )
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # nullable for migration
-    timestamp = Column(DateTime, server_default=func.now())
+    timestamp = Column(DateTime, server_default=func.now(), index=True)
 
     # Local storage (legacy - will be deprecated)
     image_path = Column(String, nullable=True)  # Changed to nullable for cloud migration

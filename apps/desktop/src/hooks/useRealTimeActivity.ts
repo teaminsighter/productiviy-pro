@@ -20,6 +20,17 @@ interface TimeStats {
   afk_time: number;
 }
 
+// Default AFK Detection settings (can be overridden via options)
+const DEFAULT_AFK_AUTO_PAUSE = 10 * 60; // 10 minutes - auto pause
+const AFK_WARNING_BUFFER = 2 * 60; // Show warning 2 minutes before auto-pause
+
+interface UseRealTimeActivityOptions {
+  afkTimeoutSeconds?: number; // How long before auto-pause (default: 600 = 10 min)
+  afkDetectionEnabled?: boolean; // Whether AFK detection is enabled
+}
+
+type DataSource = 'native' | 'activitywatch' | 'mock' | 'none';
+
 interface UseRealTimeActivityReturn {
   currentActivity: CurrentActivity | null;
   timeStats: TimeStats;
@@ -27,9 +38,23 @@ interface UseRealTimeActivityReturn {
   isLoading: boolean;
   error: string | null;
   toggleTracking: () => void;
+  // AFK Detection
+  isAfk: boolean;
+  afkDuration: number; // seconds since last activity
+  showAfkWarning: boolean;
+  dismissAfkWarning: () => void;
+  resumeFromAfk: () => void;
+  // Settings
+  afkThreshold: number;
+  // Data source info
+  dataSource: DataSource; // "native", "activitywatch", "mock", or "none"
 }
 
-export function useRealTimeActivity(): UseRealTimeActivityReturn {
+export function useRealTimeActivity(options?: UseRealTimeActivityOptions): UseRealTimeActivityReturn {
+  // AFK settings from options or defaults
+  const afkAutoPauseThreshold = options?.afkTimeoutSeconds ?? DEFAULT_AFK_AUTO_PAUSE;
+  const afkWarningThreshold = Math.max(afkAutoPauseThreshold - AFK_WARNING_BUFFER, 60); // Warning 2 min before, minimum 1 min
+  const afkDetectionEnabled = options?.afkDetectionEnabled ?? true;
   const [currentActivity, setCurrentActivity] = useState<CurrentActivity | null>(null);
   const [timeStats, setTimeStats] = useState<TimeStats>({
     today_total: 0,
@@ -43,12 +68,27 @@ export function useRealTimeActivity(): UseRealTimeActivityReturn {
   const [isTracking, setIsTracking] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<DataSource>('none');
+
+  // AFK Detection state
+  const [isAfk, setIsAfk] = useState(false);
+  const [afkDuration, setAfkDuration] = useState(0);
+  const [showAfkWarning, setShowAfkWarning] = useState(false);
+  const [afkWarningDismissed, setAfkWarningDismissed] = useState(false);
 
   // Use refs to track elapsed time locally (for smooth updates)
   const activityStartRef = useRef<number>(Date.now());
   const baseStatsRef = useRef<TimeStats>(timeStats);
   const tickIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isProductiveRef = useRef<boolean>(false);
+
+  // AFK detection refs
+  const lastActivityRef = useRef<string | null>(null);
+  const lastActivityChangeRef = useRef<number>(Date.now());
+  const autoPausedRef = useRef<boolean>(false);
+
+  // Use ref for isTracking to avoid stale closures in tick
+  const isTrackingRef = useRef<boolean>(isTracking);
 
   // Fetch initial data from server
   const fetchCurrentState = useCallback(async () => {
@@ -57,10 +97,35 @@ export function useRealTimeActivity(): UseRealTimeActivityReturn {
       const response = await apiClient.get('/api/activities/current-realtime');
       const data = response.data;
 
+      // Get idle time from API response (skip native calls to avoid blocking)
+      // The Rust backend tracking handles native activity separately
+      let osIdleSeconds = data.current_activity?.idle_seconds || 0;
+
       if (data.current_activity) {
         setCurrentActivity(data.current_activity);
         activityStartRef.current = new Date(data.current_activity.start_time).getTime();
         isProductiveRef.current = data.current_activity.is_productive;
+
+        // AFK Detection: Use actual OS-level idle_seconds instead of window changes
+        // This properly detects keyboard/mouse activity even when staying in the same window
+        if (osIdleSeconds < 30) {
+          // User is actively typing/moving mouse (less than 30s of OS-level idle)
+          lastActivityChangeRef.current = Date.now();
+          setIsAfk(false);
+          setAfkDuration(0);
+          setShowAfkWarning(false);
+          setAfkWarningDismissed(false);
+          autoPausedRef.current = false;
+        } else {
+          // Use OS idle time for AFK duration
+          setAfkDuration(osIdleSeconds);
+        }
+
+        // Also track activity key changes for logging
+        const activityKey = `${data.current_activity.app_name}:${data.current_activity.title}`;
+        if (lastActivityRef.current !== activityKey) {
+          lastActivityRef.current = activityKey;
+        }
       }
 
       // Also fetch summary to get distraction time
@@ -92,6 +157,7 @@ export function useRealTimeActivity(): UseRealTimeActivityReturn {
       }
 
       setIsTracking(data.is_tracking !== false);
+      setDataSource((data.data_source as DataSource) || 'none');
       setError(null);
     } catch (err: any) {
       console.error('Failed to fetch current state:', err);
@@ -101,9 +167,15 @@ export function useRealTimeActivity(): UseRealTimeActivityReturn {
     }
   }, []);
 
+  // Keep ref in sync with state
+  useEffect(() => {
+    isTrackingRef.current = isTracking;
+  }, [isTracking]);
+
   // Tick every second to update duration locally
   const tick = useCallback(() => {
-    if (!isTracking) return;
+    // Use ref to always get current tracking state (avoids stale closures)
+    if (!isTrackingRef.current) return;
 
     const now = Date.now();
 
@@ -113,7 +185,30 @@ export function useRealTimeActivity(): UseRealTimeActivityReturn {
       setCurrentActivity(prev => prev ? { ...prev, duration: elapsed } : null);
     }
 
-    // Update total time (add 1 second)
+    // AFK Detection: Check how long since last activity change
+    const timeSinceLastChange = Math.floor((now - lastActivityChangeRef.current) / 1000);
+    setAfkDuration(timeSinceLastChange);
+
+    // Only do AFK detection if enabled
+    if (afkDetectionEnabled) {
+      // Show warning before auto-pause (2 minutes before threshold)
+      if (timeSinceLastChange >= afkWarningThreshold && !afkWarningDismissed && !autoPausedRef.current) {
+        setShowAfkWarning(true);
+        setIsAfk(true);
+      }
+
+      // Auto-pause at configured threshold
+      if (timeSinceLastChange >= afkAutoPauseThreshold && !autoPausedRef.current) {
+        console.log(`AFK detected for ${afkAutoPauseThreshold / 60} minutes - auto-pausing tracking`);
+        autoPausedRef.current = true;
+        setIsTracking(false);
+        setShowAfkWarning(true);
+        apiClient.post('/api/activities/toggle-tracking', { tracking: false }).catch(console.error);
+        return; // Stop updating stats
+      }
+    }
+
+    // Update total time (add 1 second) - only if not AFK auto-paused
     setTimeStats(prev => {
       const newTotal = prev.today_total + 1;
       const newProductive = isProductiveRef.current
@@ -130,7 +225,7 @@ export function useRealTimeActivity(): UseRealTimeActivityReturn {
         productivity: newProductivity
       };
     });
-  }, [isTracking, currentActivity]);
+  }, [isTracking, currentActivity, afkWarningDismissed, afkDetectionEnabled, afkWarningThreshold, afkAutoPauseThreshold]);
 
   // Start/stop tick interval
   useEffect(() => {
@@ -150,10 +245,11 @@ export function useRealTimeActivity(): UseRealTimeActivityReturn {
     };
   }, [isTracking, tick]);
 
-  // Initial fetch and periodic sync with server (every 5 seconds for responsive app switching)
+  // Initial fetch and periodic sync with server (every 5 seconds to reduce API load)
   useEffect(() => {
     fetchCurrentState();
 
+    // Sync every 5 seconds (balance between responsiveness and performance)
     const syncInterval = setInterval(fetchCurrentState, 5000);
 
     return () => clearInterval(syncInterval);
@@ -164,12 +260,44 @@ export function useRealTimeActivity(): UseRealTimeActivityReturn {
     apiClient.post('/api/activities/toggle-tracking', { tracking: !isTracking }).catch(console.error);
   }, [isTracking]);
 
+  // AFK: Dismiss warning but keep tracking
+  const dismissAfkWarning = useCallback(() => {
+    setShowAfkWarning(false);
+    setAfkWarningDismissed(true);
+  }, []);
+
+  // AFK: Resume from AFK state
+  const resumeFromAfk = useCallback(() => {
+    setIsAfk(false);
+    setAfkDuration(0);
+    setShowAfkWarning(false);
+    setAfkWarningDismissed(false);
+    autoPausedRef.current = false;
+    lastActivityChangeRef.current = Date.now();
+
+    // Resume tracking if it was auto-paused
+    if (!isTracking) {
+      setIsTracking(true);
+      apiClient.post('/api/activities/toggle-tracking', { tracking: true }).catch(console.error);
+    }
+  }, [isTracking]);
+
   return {
     currentActivity,
     timeStats,
     isTracking,
     isLoading,
     error,
-    toggleTracking
+    toggleTracking,
+    // AFK Detection
+    isAfk,
+    afkDuration,
+    showAfkWarning,
+    dismissAfkWarning,
+    resumeFromAfk,
+    // Settings
+    afkThreshold: afkAutoPauseThreshold,
+    // Data source info
+    dataSource
   };
 }

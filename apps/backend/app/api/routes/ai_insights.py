@@ -381,6 +381,37 @@ async def get_weekly_insights(
         best_day = daily_list[0][0] if daily_list else "Unknown"
         worst_day = daily_list[-1][0] if daily_list else "Unknown"
 
+        # Calculate change from previous week
+        prev_start = start_of_week - timedelta(days=7)
+        prev_end = end_of_week - timedelta(days=7)
+        prev_start_dt = datetime.combine(prev_start, datetime.min.time())
+        prev_end_dt = datetime.combine(prev_end, datetime.max.time())
+
+        prev_result = await db.execute(
+            select(Activity).where(
+                and_(
+                    Activity.timestamp >= prev_start_dt,
+                    Activity.timestamp <= prev_end_dt,
+                )
+            )
+        )
+        prev_activities = prev_result.scalars().all()
+
+        prev_total_seconds = sum(a.duration or 0 for a in prev_activities)
+        prev_productive_seconds = sum(
+            (a.duration or 0) for a in prev_activities
+            if a.is_productive or (a.productivity_score and a.productivity_score > 0.5)
+        )
+
+        # Calculate changes
+        current_hours = total_seconds / 3600
+        prev_hours = prev_total_seconds / 3600
+        hours_change = current_hours - prev_hours
+
+        current_productivity = (productive_seconds / total_seconds * 100) if total_seconds > 0 else 0
+        prev_productivity = (prev_productive_seconds / prev_total_seconds * 100) if prev_total_seconds > 0 else 0
+        productivity_change = current_productivity - prev_productivity
+
         # Build weekly data
         weekly_data = {
             "week_start": start_of_week.isoformat(),
@@ -404,8 +435,8 @@ async def get_weekly_insights(
                 {"day": d, "hours": s["hours"], "productivity": s["productivity"]}
                 for d, s in daily_stats.items()
             ],
-            "hours_change": 0,  # TODO: Compare with previous week
-            "productivity_change": 0,
+            "hours_change": round(hours_change, 1),
+            "productivity_change": round(productivity_change, 1),
         }
 
     except Exception as e:

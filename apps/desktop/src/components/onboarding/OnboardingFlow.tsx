@@ -157,12 +157,12 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-950 to-black flex flex-col">
-      {/* Progress Bar */}
+    <div className="min-h-screen bg-gray-950 flex flex-col">
+      {/* Progress Bar (solid color) */}
       <div className="fixed top-0 left-0 right-0 z-50">
-        <div className="h-1 bg-white/10">
+        <div className="h-1.5 bg-white/10">
           <motion.div
-            className="h-full bg-gradient-to-r from-accent to-purple-500"
+            className="h-full bg-accent"
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}
             transition={{ duration: 0.3 }}
@@ -298,16 +298,16 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         </AnimatePresence>
       </div>
 
-      {/* Navigation Buttons */}
+      {/* Navigation Buttons - Prominent and Consistent */}
       <div className="flex justify-between items-center p-6 max-w-2xl mx-auto w-full">
         {currentStep > 1 && currentStep < 7 ? (
           <motion.button
-            whileHover={{ scale: 1.02 }}
+            whileHover={{ scale: 1.02, y: -1 }}
             whileTap={{ scale: 0.98 }}
             onClick={goBack}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-white/10 text-white font-medium hover:bg-white/15 border border-white/20 transition-all"
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={20} />
             Back
           </motion.button>
         ) : (
@@ -316,13 +316,13 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
         {currentStep > 1 && currentStep < 6 && (
           <motion.button
-            whileHover={{ scale: 1.02 }}
+            whileHover={{ scale: 1.02, y: -1 }}
             whileTap={{ scale: 0.98 }}
             onClick={goNext}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-white/50 hover:text-white transition-colors"
+            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-white/10 text-white font-medium hover:bg-white/15 border border-white/20 transition-all"
           >
-            Skip
-            <ChevronRight size={18} />
+            Skip for now
+            <ChevronRight size={20} />
           </motion.button>
         )}
       </div>

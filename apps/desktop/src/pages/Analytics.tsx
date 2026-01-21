@@ -408,13 +408,31 @@ export default function Analytics() {
         <GlassCard title="Productivity Trend" icon={TrendingUp}>
           {isTrendsLoading ? (
             <ChartSkeleton height={280} />
-          ) : trends?.trends && trends.trends.length > 0 ? (
+          ) : trends?.trends && trends.trends.length > 0 && trends.trends[0]?.date ? (
             <TrendLineChart
-              data={trends.trends}
+              data={trends.trends.filter(t => t.date).map(t => ({
+                date: t.date!,
+                productivity_score: t.productivity_score ?? 0,
+                total_time: t.total_time ?? 0,
+                productive_time: t.productive_time ?? 0,
+              }))}
               height={280}
               goalLine={70}
               animated
             />
+          ) : trends?.productivity_score !== undefined ? (
+            // Fallback: Show summary stats when detailed trends not available
+            <div className="h-[280px] flex flex-col items-center justify-center">
+              <div className="text-center">
+                <p className="text-white/50 text-sm mb-2">Current Productivity</p>
+                <p className="text-5xl font-bold text-productive mb-4">
+                  {Math.round(trends.productivity_score)}%
+                </p>
+                <p className="text-white/50 text-sm">
+                  {formatTime(trends.total_time ?? 0)} tracked this {period}
+                </p>
+              </div>
+            </div>
           ) : (
             <div className="h-[280px] flex items-center justify-center text-white/40">
               No data available
@@ -487,20 +505,32 @@ export default function Analytics() {
             </div>
           ) : trends?.insights && trends.insights.length > 0 ? (
             <div className="space-y-3">
-              {trends.insights.map((insight, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="flex items-start gap-3 p-3 rounded-xl bg-white/5"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
-                    <Zap className="w-4 h-4 text-primary" />
-                  </div>
-                  <p className="text-white/80 text-sm">{insight}</p>
-                </motion.div>
-              ))}
+              {trends.insights.map((insight, index) => {
+                // Handle both string and object formats from API
+                const insightText = typeof insight === 'string' ? insight : (insight as any)?.message || '';
+                const insightType = typeof insight === 'object' ? (insight as any)?.type : 'info';
+                const typeColors: Record<string, string> = {
+                  positive: 'bg-productive/20 text-productive',
+                  warning: 'bg-distracting/20 text-distracting',
+                  info: 'bg-primary/20 text-primary',
+                };
+                const colorClass = typeColors[insightType] || typeColors.info;
+
+                return (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="flex items-start gap-3 p-3 rounded-xl bg-white/5"
+                  >
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${colorClass.split(' ')[0]}`}>
+                      <Zap className={`w-4 h-4 ${colorClass.split(' ')[1]}`} />
+                    </div>
+                    <p className="text-white/80 text-sm">{insightText}</p>
+                  </motion.div>
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-8 text-white/40">

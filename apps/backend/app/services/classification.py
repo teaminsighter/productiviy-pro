@@ -1,6 +1,7 @@
 """
 Productivity Classification Service
 Classifies activities based on rules and custom lists.
+Now integrates with user-defined PlatformRule and URLRule from database.
 """
 
 from typing import Optional, Dict, Any, List, Tuple
@@ -8,9 +9,11 @@ from dataclasses import dataclass
 from functools import lru_cache
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from urllib.parse import urlparse
 
 from app.services.url_analyzer import url_analyzer
 from app.models.settings import CustomList
+from app.models.rules import PlatformRule, URLRule, DEFAULT_PLATFORM_RULES
 
 
 @dataclass
@@ -35,44 +38,71 @@ class ProductivityClassifier:
     PRODUCTIVE_APPS = {
         "VS Code": ("development", 0.95),
         "Visual Studio Code": ("development", 0.95),
+        "Code": ("development", 0.95),
         "Visual Studio": ("development", 0.90),
         "PyCharm": ("development", 0.95),
         "IntelliJ IDEA": ("development", 0.95),
+        "IntelliJ": ("development", 0.95),
         "WebStorm": ("development", 0.95),
         "Xcode": ("development", 0.95),
         "Android Studio": ("development", 0.95),
         "Sublime Text": ("development", 0.90),
+        "Sublime": ("development", 0.90),
         "Atom": ("development", 0.85),
         "Vim": ("development", 0.90),
         "Neovim": ("development", 0.90),
+        "nvim": ("development", 0.90),
         "Emacs": ("development", 0.90),
         "Terminal": ("development", 0.85),
         "iTerm2": ("development", 0.85),
+        "iTerm": ("development", 0.85),
         "Hyper": ("development", 0.85),
         "Warp": ("development", 0.85),
         "Alacritty": ("development", 0.85),
+        "kitty": ("development", 0.85),
         "Postman": ("development", 0.85),
         "Insomnia": ("development", 0.85),
         "TablePlus": ("development", 0.80),
         "DBeaver": ("development", 0.80),
         "Sequel Pro": ("development", 0.80),
+        "DataGrip": ("development", 0.80),
+        "Cursor": ("development", 0.95),
+        "Zed": ("development", 0.90),
+        "Fleet": ("development", 0.90),
+        "productify-pro": ("productivity", 0.80),
+        "Productify Pro": ("productivity", 0.80),
         "Figma": ("design", 0.85),
         "Sketch": ("design", 0.85),
         "Adobe XD": ("design", 0.85),
         "Adobe Photoshop": ("design", 0.80),
+        "Photoshop": ("design", 0.80),
         "Adobe Illustrator": ("design", 0.80),
+        "Illustrator": ("design", 0.80),
+        "Adobe Premiere": ("design", 0.75),
+        "Premiere Pro": ("design", 0.75),
+        "Final Cut Pro": ("design", 0.75),
+        "DaVinci Resolve": ("design", 0.75),
         "Notion": ("productivity", 0.80),
         "Obsidian": ("productivity", 0.85),
         "Bear": ("productivity", 0.80),
         "Microsoft Word": ("productivity", 0.75),
+        "Word": ("productivity", 0.75),
         "Microsoft Excel": ("productivity", 0.80),
+        "Excel": ("productivity", 0.80),
         "Microsoft PowerPoint": ("productivity", 0.70),
+        "PowerPoint": ("productivity", 0.70),
         "Google Docs": ("productivity", 0.75),
         "Google Sheets": ("productivity", 0.80),
         "Linear": ("project_management", 0.85),
         "Jira": ("project_management", 0.80),
         "Asana": ("project_management", 0.75),
         "Trello": ("project_management", 0.70),
+        "ClickUp": ("project_management", 0.75),
+        "Monday": ("project_management", 0.70),
+        "Basecamp": ("project_management", 0.70),
+        "Notes": ("productivity", 0.65),
+        "Apple Notes": ("productivity", 0.65),
+        "Reminders": ("productivity", 0.60),
     }
 
     # System apps to exclude from tracking (idle, lock screen, etc.)
@@ -86,12 +116,15 @@ class ProductivityClassifier:
         "SystemUIServer": ("system", 0.0),
     }
 
-    # Neutral apps (communication, etc.)
+    # Neutral apps (communication, browsers, etc.)
     NEUTRAL_APPS = {
+        # Communication
         "Slack": ("communication", 0.50),
         "Discord": ("communication", 0.40),
         "Microsoft Teams": ("communication", 0.55),
+        "Teams": ("communication", 0.55),
         "Zoom": ("meeting", 0.55),
+        "zoom.us": ("meeting", 0.55),
         "Google Meet": ("meeting", 0.55),
         "Skype": ("communication", 0.45),
         "Mail": ("email", 0.55),
@@ -105,13 +138,40 @@ class ProductivityClassifier:
         "WhatsApp": ("communication", 0.30),
         "Telegram": ("communication", 0.35),
         "Signal": ("communication", 0.35),
+        # Browsers (neutral - depends on what you're doing)
+        "Google Chrome": ("browsing", 0.50),
+        "Chrome": ("browsing", 0.50),
+        "Safari": ("browsing", 0.50),
+        "Firefox": ("browsing", 0.50),
+        "Mozilla Firefox": ("browsing", 0.50),
+        "Microsoft Edge": ("browsing", 0.50),
+        "Edge": ("browsing", 0.50),
+        "Brave": ("browsing", 0.50),
+        "Brave Browser": ("browsing", 0.50),
+        "Arc": ("browsing", 0.50),
+        "Opera": ("browsing", 0.50),
+        "Vivaldi": ("browsing", 0.50),
+        "Chromium": ("browsing", 0.50),
+        # Electron apps (often development related - VS Code, Cursor, etc.)
+        "Electron": ("development", 0.75),
+        # System apps
         "Finder": ("system", 0.50),
         "File Explorer": ("system", 0.50),
+        "Explorer": ("system", 0.50),
         "System Preferences": ("system", 0.50),
+        "System Settings": ("system", 0.50),
         "Settings": ("system", 0.50),
+        "Preview": ("system", 0.50),
+        "Activity Monitor": ("system", 0.50),
+        "Task Manager": ("system", 0.50),
+        # Music apps
         "Spotify": ("music", 0.50),
         "Apple Music": ("music", 0.50),
         "Music": ("music", 0.50),
+        "iTunes": ("music", 0.50),
+        "Deezer": ("music", 0.50),
+        "Amazon Music": ("music", 0.50),
+        "YouTube Music": ("music", 0.45),
     }
 
     # Distracting apps
@@ -181,9 +241,12 @@ class ProductivityClassifier:
 
     def __init__(self):
         self._custom_lists_cache: Dict[str, List[str]] = {}
+        self._platform_rules_cache: Dict[str, Dict[str, Any]] = {}
+        self._url_rules_cache: Dict[str, Dict[str, Any]] = {}
         self._cache_loaded = False
+        self._user_id = 1  # Default user
 
-    async def load_custom_lists(self, db: AsyncSession) -> None:
+    async def load_custom_lists(self, db: AsyncSession, user_id: int = 1) -> None:
         """Load custom lists from database"""
         try:
             result = await db.execute(select(CustomList))
@@ -204,6 +267,137 @@ class ProductivityClassifier:
         except Exception as e:
             print(f"Error loading custom lists: {e}")
 
+    async def load_user_rules(self, db: AsyncSession, user_id: int = 1) -> None:
+        """Load user-defined platform and URL rules from database"""
+        try:
+            self._user_id = user_id
+
+            # Load platform rules
+            platform_result = await db.execute(
+                select(PlatformRule).where(PlatformRule.user_id == user_id)
+            )
+            platform_rules = platform_result.scalars().all()
+
+            self._platform_rules_cache = {}
+            for rule in platform_rules:
+                self._platform_rules_cache[rule.domain.lower()] = {
+                    "productivity": rule.productivity,
+                    "category": rule.category,
+                    "is_custom": rule.is_custom
+                }
+
+            # Load URL rules
+            url_result = await db.execute(
+                select(URLRule).where(URLRule.user_id == user_id)
+            )
+            url_rules = url_result.scalars().all()
+
+            self._url_rules_cache = {}
+            for rule in url_rules:
+                self._url_rules_cache[rule.url_pattern.lower()] = {
+                    "productivity": rule.productivity,
+                    "category": rule.category,
+                    "override_platform": rule.override_platform
+                }
+
+            print(f"Loaded {len(self._platform_rules_cache)} platform rules and {len(self._url_rules_cache)} URL rules for user {user_id}")
+        except Exception as e:
+            print(f"Error loading user rules: {e}")
+
+    def _extract_domain(self, url_or_title: str) -> Optional[str]:
+        """Extract domain from URL or window title"""
+        if not url_or_title:
+            return None
+
+        # Try to parse as URL
+        if url_or_title.startswith(('http://', 'https://')):
+            try:
+                parsed = urlparse(url_or_title)
+                return parsed.netloc.lower().replace('www.', '')
+            except:
+                pass
+
+        # Try to extract domain from title (common format: "Page Title - domain.com")
+        parts = url_or_title.split(' - ')
+        for part in reversed(parts):
+            part = part.strip().lower()
+            if '.' in part and ' ' not in part:
+                return part.replace('www.', '')
+
+        return None
+
+    def _check_user_platform_rule(self, domain: str) -> Optional[ClassificationResult]:
+        """Check if there's a user-defined platform rule for this domain"""
+        domain_lower = domain.lower()
+
+        # Check user custom rules first
+        if domain_lower in self._platform_rules_cache:
+            rule = self._platform_rules_cache[domain_lower]
+            productivity_type = rule["productivity"]
+            score = self._type_to_score(productivity_type)
+            return ClassificationResult(
+                productivity_score=score,
+                productivity_type=productivity_type,
+                category=rule["category"] or "custom",
+                reason=f"Custom rule for '{domain}'",
+                source="user_rule"
+            )
+
+        # Check default platform rules
+        if domain_lower in DEFAULT_PLATFORM_RULES:
+            default = DEFAULT_PLATFORM_RULES[domain_lower]
+            productivity_type = default["productivity"]
+            score = self._type_to_score(productivity_type)
+            return ClassificationResult(
+                productivity_score=score,
+                productivity_type=productivity_type,
+                category=default["category"],
+                reason=f"Default rule for '{domain}'",
+                source="default_rule"
+            )
+
+        return None
+
+    def _check_user_url_rule(self, url: str) -> Optional[ClassificationResult]:
+        """Check if there's a user-defined URL rule matching this URL"""
+        url_lower = url.lower()
+
+        for pattern, rule in self._url_rules_cache.items():
+            # Simple pattern matching (supports * wildcard)
+            if '*' in pattern:
+                prefix = pattern.split('*')[0]
+                if prefix in url_lower:
+                    productivity_type = rule["productivity"]
+                    score = self._type_to_score(productivity_type)
+                    return ClassificationResult(
+                        productivity_score=score,
+                        productivity_type=productivity_type,
+                        category=rule["category"] or "custom",
+                        reason=f"URL rule match: '{pattern}'",
+                        source="user_rule"
+                    )
+            elif pattern in url_lower:
+                productivity_type = rule["productivity"]
+                score = self._type_to_score(productivity_type)
+                return ClassificationResult(
+                    productivity_score=score,
+                    productivity_type=productivity_type,
+                    category=rule["category"] or "custom",
+                    reason=f"URL rule match: '{pattern}'",
+                    source="user_rule"
+                )
+
+        return None
+
+    def _type_to_score(self, productivity_type: str) -> float:
+        """Convert productivity type to score"""
+        if productivity_type == "productive":
+            return 0.9
+        elif productivity_type == "distracting":
+            return 0.15
+        else:
+            return 0.5
+
     def classify(
         self,
         app_name: str,
@@ -213,6 +407,15 @@ class ProductivityClassifier:
     ) -> ClassificationResult:
         """
         Classify an activity by productivity.
+
+        Priority order:
+        1. User-defined URL rules (highest)
+        2. User-defined platform rules
+        3. Custom lists (productive/distracting patterns)
+        4. Default platform rules
+        5. Built-in app/domain rules
+        6. Window title analysis
+        7. Default neutral
 
         Args:
             app_name: Name of the application
@@ -225,7 +428,25 @@ class ProductivityClassifier:
         """
         lists = custom_lists or self._custom_lists_cache
 
-        # 1. Check if app is in excluded list
+        # 1. Check user URL rules first (highest priority - overrides platform rules)
+        if url:
+            url_rule_result = self._check_user_url_rule(url)
+            if url_rule_result:
+                return url_rule_result
+
+        # 2. Extract domain and check user platform rules
+        domain = None
+        if url:
+            domain = self._extract_domain(url)
+        elif window_title:
+            domain = self._extract_domain(window_title)
+
+        if domain:
+            platform_rule_result = self._check_user_platform_rule(domain)
+            if platform_rule_result:
+                return platform_rule_result
+
+        # 3. Check if app is in excluded list
         if self._matches_list(app_name, lists.get("excluded", [])):
             return ClassificationResult(
                 productivity_score=0.5,
@@ -235,7 +456,7 @@ class ProductivityClassifier:
                 source="custom_list"
             )
 
-        # 2. Check custom productive list
+        # 4. Check custom productive list
         if self._matches_list(app_name, lists.get("productive", [])):
             return ClassificationResult(
                 productivity_score=0.9,
@@ -245,7 +466,7 @@ class ProductivityClassifier:
                 source="custom_list"
             )
 
-        # 3. Check custom distracting list
+        # 5. Check custom distracting list
         if self._matches_list(app_name, lists.get("distracting", [])):
             return ClassificationResult(
                 productivity_score=0.1,
@@ -255,30 +476,92 @@ class ProductivityClassifier:
                 source="custom_list"
             )
 
-        # 4. Check URL-based classification for browsers
+        # 6. Check URL-based classification for browsers (built-in rules)
         if url:
             url_result = self._classify_url(url, lists)
             if url_result:
                 return url_result
 
-        # 5. Check built-in app rules
+        # 7. Check built-in app rules
         app_result = self._classify_app(app_name)
         if app_result:
             return app_result
 
-        # 6. Check window title for hints
+        # 8. Check window title for hints
         title_result = self._classify_by_title(window_title)
         if title_result:
             return title_result
 
-        # 7. Default to neutral
+        # 9. Smart category detection based on app name patterns
+        category = self._detect_category_from_name(app_name)
+
         return ClassificationResult(
             productivity_score=0.5,
             productivity_type="neutral",
-            category="other",
-            reason=f"No specific rule found for '{app_name}'",
+            category=category,
+            reason=f"Categorized '{app_name}' as {category}",
             source="default"
         )
+
+    def _detect_category_from_name(self, name: str) -> str:
+        """Detect category from app/domain name using patterns"""
+        name_lower = name.lower()
+
+        # Development patterns
+        dev_patterns = ['code', 'studio', 'ide', 'terminal', 'console', 'git',
+                       'docker', 'node', 'python', 'npm', 'yarn', 'pnpm',
+                       'debug', 'compiler', 'build', 'dev']
+        if any(p in name_lower for p in dev_patterns):
+            return "development"
+
+        # Design patterns
+        design_patterns = ['design', 'figma', 'sketch', 'adobe', 'photo',
+                          'illustrat', 'draw', 'canvas', 'art']
+        if any(p in name_lower for p in design_patterns):
+            return "design"
+
+        # Communication patterns
+        comm_patterns = ['mail', 'email', 'message', 'chat', 'slack', 'team',
+                        'meet', 'zoom', 'call', 'video']
+        if any(p in name_lower for p in comm_patterns):
+            return "communication"
+
+        # Browser patterns
+        browser_patterns = ['chrome', 'firefox', 'safari', 'edge', 'browser',
+                           'brave', 'opera', 'vivaldi', 'arc']
+        if any(p in name_lower for p in browser_patterns):
+            return "browsing"
+
+        # Productivity patterns
+        prod_patterns = ['note', 'doc', 'sheet', 'office', 'word', 'excel',
+                        'notion', 'obsidian', 'calendar', 'todo', 'task']
+        if any(p in name_lower for p in prod_patterns):
+            return "productivity"
+
+        # Music/media patterns
+        media_patterns = ['music', 'spotify', 'audio', 'sound', 'podcast']
+        if any(p in name_lower for p in media_patterns):
+            return "music"
+
+        # Video patterns
+        video_patterns = ['video', 'movie', 'stream', 'netflix', 'youtube',
+                         'hulu', 'disney', 'prime']
+        if any(p in name_lower for p in video_patterns):
+            return "video"
+
+        # Gaming patterns
+        game_patterns = ['game', 'steam', 'epic', 'play', 'xbox', 'psn']
+        if any(p in name_lower for p in game_patterns):
+            return "gaming"
+
+        # System patterns
+        system_patterns = ['system', 'settings', 'preferences', 'finder',
+                          'explorer', 'monitor', 'manager', 'utility']
+        if any(p in name_lower for p in system_patterns):
+            return "system"
+
+        # Default to software
+        return "software"
 
     def _matches_list(self, value: str, patterns: List[str]) -> bool:
         """Check if value matches any pattern in the list"""
@@ -464,11 +747,55 @@ class ProductivityClassifier:
 # Singleton instance
 productivity_classifier = ProductivityClassifier()
 
+# Track when rules were last loaded
+_rules_loaded_at: Optional[float] = None
+_rules_cache_ttl = 300  # 5 minutes cache
+
 
 def classify_activity(
     app_name: str,
     window_title: str = "",
     url: Optional[str] = None
 ) -> ClassificationResult:
-    """Convenience function to classify an activity"""
+    """Convenience function to classify an activity (uses cached rules)"""
     return productivity_classifier.classify(app_name, window_title, url)
+
+
+async def classify_activity_with_rules(
+    app_name: str,
+    window_title: str,
+    url: Optional[str],
+    db: AsyncSession,
+    user_id: int = 1,
+    force_refresh: bool = False
+) -> ClassificationResult:
+    """
+    Classify an activity with user rules loaded from database.
+    Uses cached rules with 5-minute TTL for performance.
+    """
+    import time
+    global _rules_loaded_at
+
+    current_time = time.time()
+
+    # Load rules if cache is stale or forced refresh
+    if (
+        force_refresh or
+        _rules_loaded_at is None or
+        (current_time - _rules_loaded_at) > _rules_cache_ttl
+    ):
+        await productivity_classifier.load_user_rules(db, user_id)
+        await productivity_classifier.load_custom_lists(db, user_id)
+        _rules_loaded_at = current_time
+
+    return productivity_classifier.classify(app_name, window_title, url)
+
+
+async def refresh_classification_rules(db: AsyncSession, user_id: int = 1) -> None:
+    """Force refresh of classification rules from database"""
+    global _rules_loaded_at
+    await productivity_classifier.load_user_rules(db, user_id)
+    await productivity_classifier.load_custom_lists(db, user_id)
+    import time
+    _rules_loaded_at = time.time()
+    print(f"Classification rules refreshed for user {user_id}")

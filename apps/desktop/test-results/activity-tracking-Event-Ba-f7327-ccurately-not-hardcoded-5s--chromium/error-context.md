@@ -1,0 +1,48 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - img [ref=e10]
+      - heading "Welcome back" [level=1] [ref=e12]
+      - paragraph [ref=e13]: Sign in to continue to Productify Pro
+    - generic [ref=e14]:
+      - button "Continue with Google" [ref=e15] [cursor=pointer]:
+        - img [ref=e16]
+        - text: Continue with Google
+      - generic [ref=e25]: or continue with email
+      - generic [ref=e26]: Too many requests. Please try again later.
+      - generic [ref=e27]:
+        - generic [ref=e28]:
+          - generic [ref=e29]: Email
+          - generic [ref=e30]:
+            - img [ref=e31]
+            - textbox "you@example.com" [ref=e34]: e2etest@productifypro.com
+        - generic [ref=e35]:
+          - generic [ref=e36]: Password
+          - generic [ref=e37]:
+            - img [ref=e38]
+            - textbox "••••••••" [ref=e41]: E2ETestPass123#
+            - button [ref=e42] [cursor=pointer]:
+              - img [ref=e43]
+        - generic [ref=e46]:
+          - generic [ref=e47]:
+            - checkbox "Remember me" [ref=e48]
+            - generic [ref=e49]: Remember me
+          - link "Forgot password?" [ref=e50] [cursor=pointer]:
+            - /url: /forgot-password
+        - button "Sign in" [ref=e51] [cursor=pointer]
+      - paragraph [ref=e52]:
+        - text: Don't have an account?
+        - link "Sign up free" [ref=e53] [cursor=pointer]:
+          - /url: /register
+    - paragraph [ref=e54]:
+      - text: By signing in, you agree to our
+      - link "Terms of Service" [ref=e55] [cursor=pointer]:
+        - /url: "#"
+      - text: and
+      - link "Privacy Policy" [ref=e56] [cursor=pointer]:
+        - /url: "#"
+  - region "Notifications alt+T"
+```

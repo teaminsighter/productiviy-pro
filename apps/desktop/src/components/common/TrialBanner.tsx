@@ -15,7 +15,10 @@ export function TrialBanner() {
   if (user.has_premium_access && !user.is_trial_active) return null;
 
   const isTrialEnding = user.is_trial_active && user.days_left_trial <= 3;
-  const isTrialExpired = !user.is_trial_active && user.plan === 'free';
+  // Only show expired if user had a trial that actually expired (days_left_trial <= 0)
+  // This prevents showing "expired" for new users or users who never had a trial
+  const isTrialExpired = !user.is_trial_active && user.plan === 'free' &&
+    typeof user.days_left_trial === 'number' && user.days_left_trial <= 0;
 
   if (isTrialExpired) {
     return (

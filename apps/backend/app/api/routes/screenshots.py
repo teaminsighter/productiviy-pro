@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime, timedelta
@@ -15,6 +15,7 @@ from app.api.routes.auth import get_current_user_optional
 from app.services.screenshot_service import screenshot_service
 from app.services.activity_tracker import activity_watch_client
 from app.services.classification import classify_activity
+from app.api.routes.activities import get_current_native_activity
 
 router = APIRouter()
 
@@ -50,9 +51,14 @@ async def get_screenshots(
     """Get list of screenshots with optional filters"""
     query = select(Screenshot).where(Screenshot.is_deleted == False).order_by(Screenshot.timestamp.desc())
 
-    # Filter by user_id if authenticated
+    # Filter by user_id if authenticated - include user's screenshots AND unassigned (NULL) screenshots
     if current_user:
-        query = query.where(Screenshot.user_id == current_user.id)
+        query = query.where(
+            or_(
+                Screenshot.user_id == current_user.id,
+                Screenshot.user_id == None  # Include legacy screenshots without user_id
+            )
+        )
 
     # Apply date filter
     if date:
@@ -129,15 +135,78 @@ async def list_screenshot_files(limit: int = Query(50)):
     return {"screenshots": files, "count": len(files), "directory": str(screenshots_dir)}
 
 
+def _get_media_type(filename: str) -> str:
+    """Determine media type from filename"""
+    if filename.endswith('.webp'):
+        return "image/webp"
+    return "image/jpeg"
+
+
+def _sanitize_filename(filename: str) -> str:
+    """
+    Sanitize filename to prevent path traversal attacks.
+
+    Removes any directory components and ensures filename only contains
+    safe characters for the filesystem.
+    """
+    # Get just the filename, stripping any directory components
+    safe_name = os.path.basename(filename)
+
+    # Remove any null bytes (potential security bypass)
+    safe_name = safe_name.replace('\x00', '')
+
+    # Ensure filename is not empty after sanitization
+    if not safe_name:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    return safe_name
+
+
+def _validate_screenshot_path(filename: str) -> Path:
+    """
+    Validate that the requested file is within the screenshots directory.
+
+    Args:
+        filename: The requested filename
+
+    Returns:
+        The validated full path
+
+    Raises:
+        HTTPException: If the path is invalid or outside the screenshots directory
+    """
+    # Sanitize the filename first
+    safe_filename = _sanitize_filename(filename)
+
+    # Construct the full path
+    screenshots_dir = screenshot_service.screenshots_path.resolve()
+    filepath = (screenshots_dir / safe_filename).resolve()
+
+    # Ensure the resolved path is still within the screenshots directory
+    try:
+        filepath.relative_to(screenshots_dir)
+    except ValueError:
+        # Path is outside the screenshots directory
+        raise HTTPException(status_code=403, detail="Access denied: Invalid file path")
+
+    # Validate file extension (only allow image files)
+    allowed_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
+    if filepath.suffix.lower() not in allowed_extensions:
+        raise HTTPException(status_code=400, detail="Invalid file type")
+
+    return filepath
+
+
 @router.get("/files/{filename}")
 async def get_screenshot_file(filename: str):
     """Get a screenshot file directly by filename"""
-    filepath = screenshot_service.screenshots_path / filename
+    # Validate and sanitize the path to prevent path traversal
+    filepath = _validate_screenshot_path(filename)
 
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="Screenshot file not found")
 
-    return FileResponse(filepath, media_type="image/jpeg", filename=filename)
+    return FileResponse(filepath, media_type=_get_media_type(filename), filename=filepath.name)
 
 
 @router.post("/capture/quick")
@@ -154,6 +223,65 @@ async def quick_capture():
         "timestamp": result["timestamp"],
         "image_path": result["image_path"],
         "thumbnail_path": result.get("thumbnail_path"),
+    }
+
+
+@router.get("/stats")
+async def get_screenshot_stats(
+    days: int = Query(7, description="Number of days"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Get screenshot statistics"""
+    start = datetime.now() - timedelta(days=days)
+
+    # Build query with user filter for consistency with list endpoint
+    query = select(Screenshot).where(
+        and_(
+            Screenshot.timestamp >= start,
+            Screenshot.is_deleted == False
+        )
+    )
+
+    # Filter by user_id if authenticated - include user's screenshots AND unassigned (NULL) screenshots
+    if current_user:
+        query = query.where(
+            or_(
+                Screenshot.user_id == current_user.id,
+                Screenshot.user_id == None  # Include legacy screenshots without user_id
+            )
+        )
+
+    result = await db.execute(query)
+    screenshots = result.scalars().all()
+
+    # Calculate stats
+    total_count = len(screenshots)
+
+    # Calculate storage
+    total_size = 0
+    for s in screenshots:
+        try:
+            if s.image_path and os.path.exists(s.image_path):
+                total_size += os.path.getsize(s.image_path)
+            if s.thumbnail_path and os.path.exists(s.thumbnail_path):
+                total_size += os.path.getsize(s.thumbnail_path)
+        except OSError:
+            pass
+
+    # Category breakdown
+    categories: dict = {}
+    for s in screenshots:
+        cat = s.category
+        categories[cat] = categories.get(cat, 0) + 1
+
+    return {
+        "period_days": days,
+        "total_count": total_count,
+        "storage_bytes": total_size,
+        "storage_mb": round(total_size / (1024 * 1024), 2),
+        "categories": categories,
+        "daily_average": round(total_count / days, 1) if days > 0 else 0,
     }
 
 
@@ -216,7 +344,7 @@ async def get_screenshot_image(
 
     return FileResponse(
         image_path,
-        media_type="image/jpeg",
+        media_type=_get_media_type(image_path),
         filename=os.path.basename(image_path)
     )
 
@@ -263,8 +391,23 @@ async def capture_screenshot_now(
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Capture a screenshot immediately"""
-    # Get current activity for metadata
+    # Get current activity for metadata - prioritize native tracking
+    native_activity = get_current_native_activity()
     current_activity = await activity_watch_client.get_current_activity()
+
+    # Use native activity if available (from Tauri desktop app)
+    app_name = None
+    window_title = None
+    url = None
+
+    if native_activity:
+        app_name = native_activity.get("app_name")
+        window_title = native_activity.get("window_title")
+        url = native_activity.get("url")
+    elif current_activity:
+        app_name = current_activity.app_name
+        window_title = current_activity.window_title
+        url = current_activity.url
 
     # Capture screenshot with user context
     result = await screenshot_service.capture_screenshot(
@@ -276,9 +419,9 @@ async def capture_screenshot_now(
 
     # Classify the activity
     classification = classify_activity(
-        current_activity.app_name if current_activity else "Unknown",
-        current_activity.window_title if current_activity else "",
-        current_activity.url if current_activity else None,
+        app_name or "Unknown",
+        window_title or "",
+        url,
     )
 
     # Update screenshot metadata in database
@@ -287,9 +430,9 @@ async def capture_screenshot_now(
         update(Screenshot)
         .where(Screenshot.id == result["id"])
         .values(
-            app_name=current_activity.app_name if current_activity else None,
-            window_title=current_activity.window_title if current_activity else None,
-            url=current_activity.url if current_activity else None,
+            app_name=app_name,
+            window_title=window_title,
+            url=url,
             category=classification.category,
         )
     )
@@ -299,7 +442,7 @@ async def capture_screenshot_now(
         "status": "captured",
         "id": result["id"],
         "timestamp": result["timestamp"],
-        "app_name": current_activity.app_name if current_activity else None,
+        "app_name": app_name,
         "category": classification.category,
         "productivity_type": classification.productivity_type,
     }
@@ -312,6 +455,9 @@ class ScreenshotSettingsUpdate(BaseModel):
     blur_mode: Optional[str] = None
     quality: Optional[int] = None
     excluded_apps: Optional[List[str]] = None
+    retention_days: Optional[int] = None  # 0 = keep forever
+    resolution: Optional[str] = None  # full, high, medium, low
+    format: Optional[str] = None  # webp, jpeg
 
 
 @router.get("/settings/current")
@@ -324,6 +470,10 @@ async def get_screenshot_settings():
         "blur_mode": screenshot_service.blur_mode,
         "quality": screenshot_service.quality,
         "excluded_apps": screenshot_service.excluded_apps,
+        "retention_days": screenshot_service.retention_days,
+        "resolution": screenshot_service.resolution,
+        "format": screenshot_service.format,
+        "resolution_presets": list(screenshot_service.RESOLUTION_PRESETS.keys()),
     }
 
 
@@ -340,6 +490,9 @@ async def update_screenshot_settings(
         excluded_apps=settings.excluded_apps,
         blur_mode=settings.blur_mode,
         quality=settings.quality,
+        retention_days=settings.retention_days,
+        resolution=settings.resolution,
+        format=settings.format,
     )
 
     return {
@@ -351,55 +504,10 @@ async def update_screenshot_settings(
             "blur_mode": screenshot_service.blur_mode,
             "quality": screenshot_service.quality,
             "excluded_apps": screenshot_service.excluded_apps,
+            "retention_days": screenshot_service.retention_days,
+            "resolution": screenshot_service.resolution,
+            "format": screenshot_service.format,
         }
-    }
-
-
-@router.get("/stats")
-async def get_screenshot_stats(
-    days: int = Query(7, description="Number of days"),
-    db: AsyncSession = Depends(get_db),
-):
-    """Get screenshot statistics"""
-    start = datetime.now() - timedelta(days=days)
-
-    result = await db.execute(
-        select(Screenshot).where(
-            and_(
-                Screenshot.timestamp >= start,
-                Screenshot.is_deleted == False
-            )
-        )
-    )
-    screenshots = result.scalars().all()
-
-    # Calculate stats
-    total_count = len(screenshots)
-
-    # Calculate storage
-    total_size = 0
-    for s in screenshots:
-        try:
-            if s.image_path and os.path.exists(s.image_path):
-                total_size += os.path.getsize(s.image_path)
-            if s.thumbnail_path and os.path.exists(s.thumbnail_path):
-                total_size += os.path.getsize(s.thumbnail_path)
-        except OSError:
-            pass
-
-    # Category breakdown
-    categories: dict = {}
-    for s in screenshots:
-        cat = s.category
-        categories[cat] = categories.get(cat, 0) + 1
-
-    return {
-        "period_days": days,
-        "total_count": total_count,
-        "storage_bytes": total_size,
-        "storage_mb": round(total_size / (1024 * 1024), 2),
-        "categories": categories,
-        "daily_average": round(total_count / days, 1) if days > 0 else 0,
     }
 
 

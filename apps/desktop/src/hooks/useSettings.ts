@@ -1,9 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useState } from 'react';
 import {
   fetchSettings,
   updateSettings,
   updateGeneralSettings,
   updateTrackingSettings,
+  updateScreenshotSettings,
   updatePrivacySettings,
   updateNotificationSettings,
   getAPIKeyStatus,
@@ -15,7 +17,6 @@ import {
   updateCustomLists,
   addToCustomList,
   removeFromCustomList,
-  exportData,
   clearAllData,
   deleteAllScreenshots,
   resetSettings,
@@ -24,6 +25,7 @@ import {
   SettingsUpdate,
   GeneralSettings,
   TrackingSettings,
+  ScreenshotSettings,
   PrivacySettings,
   NotificationSettings,
   CustomLists,
@@ -32,6 +34,16 @@ import {
   APIKeyTestResult,
   StorageInfo,
 } from '@/lib/api/settings';
+import {
+  getAppInfo,
+  getAutostart,
+  setAutostart,
+  getSystemTheme,
+  setWindowTheme,
+  setTrayVisible,
+  isTauri,
+  AppInfo,
+} from '@/lib/tauri';
 
 // ============================================================================
 // Query Keys
@@ -160,9 +172,20 @@ export function useUpdateAISettings() {
   return useMutation<
     { status: string },
     Error,
-    { model: string; auto_analysis: boolean; analysis_frequency: string }
+    { aiModel: string; autoAnalysis: boolean; analysisFrequency: string }
   >({
     mutationFn: updateAISettings,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: settingsKeys.list() });
+    },
+  });
+}
+
+export function useUpdateScreenshotSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation<{ status: string }, Error, ScreenshotSettings>({
+    mutationFn: updateScreenshotSettings,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: settingsKeys.list() });
     },
@@ -233,8 +256,11 @@ export function useRemoveFromCustomList() {
 // ============================================================================
 
 export function useExportData() {
-  return useMutation<{ status: string; download_url: string }, Error>({
-    mutationFn: exportData,
+  return useMutation<void, Error>({
+    mutationFn: async () => {
+      const { downloadExportAsFile } = await import('@/lib/api/settings');
+      await downloadExportAsFile();
+    },
   });
 }
 
@@ -277,4 +303,194 @@ export function useStorageInfo() {
     queryFn: getStorageInfo,
     staleTime: 60000, // 1 minute
   });
+}
+
+// ============================================================================
+// Native Settings Hooks (Tauri)
+// ============================================================================
+
+export const nativeSettingsKeys = {
+  all: ['nativeSettings'] as const,
+  appInfo: () => [...nativeSettingsKeys.all, 'appInfo'] as const,
+  autostart: () => [...nativeSettingsKeys.all, 'autostart'] as const,
+  systemTheme: () => [...nativeSettingsKeys.all, 'systemTheme'] as const,
+};
+
+/**
+ * Get app version and build info
+ */
+export function useAppInfo() {
+  return useQuery<AppInfo, Error>({
+    queryKey: nativeSettingsKeys.appInfo(),
+    queryFn: getAppInfo,
+    staleTime: Infinity, // Never stale - version doesn't change
+  });
+}
+
+/**
+ * Get and set autostart status
+ */
+export function useAutostart() {
+  const queryClient = useQueryClient();
+  const [isEnabled, setIsEnabled] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchAutostart() {
+      try {
+        const enabled = await getAutostart();
+        setIsEnabled(enabled);
+      } catch (error) {
+        console.error('Failed to get autostart status:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchAutostart();
+  }, []);
+
+  const toggle = useCallback(async (enabled: boolean) => {
+    try {
+      await setAutostart(enabled);
+      setIsEnabled(enabled);
+      queryClient.invalidateQueries({ queryKey: nativeSettingsKeys.autostart() });
+      return true;
+    } catch (error) {
+      console.error('Failed to set autostart:', error);
+      return false;
+    }
+  }, [queryClient]);
+
+  return { isEnabled, isLoading, toggle };
+}
+
+/**
+ * Get system theme preference
+ */
+export function useSystemTheme() {
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  useEffect(() => {
+    async function fetchTheme() {
+      try {
+        const systemTheme = await getSystemTheme();
+        setTheme(systemTheme);
+      } catch (error) {
+        console.error('Failed to get system theme:', error);
+      }
+    }
+    fetchTheme();
+
+    // Listen for system theme changes
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      setTheme(e.matches ? 'dark' : 'light');
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  return theme;
+}
+
+/**
+ * Apply theme to window
+ */
+export function useApplyTheme() {
+  const applyTheme = useCallback(async (theme: 'dark' | 'light' | 'system') => {
+    try {
+      await setWindowTheme(theme);
+
+      // Also update CSS class for immediate visual feedback
+      const root = document.documentElement;
+      root.classList.remove('dark', 'light');
+
+      if (theme === 'system') {
+        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        root.classList.add(isDark ? 'dark' : 'light');
+      } else {
+        root.classList.add(theme);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Failed to apply theme:', error);
+      return false;
+    }
+  }, []);
+
+  return applyTheme;
+}
+
+/**
+ * Control tray visibility
+ */
+export function useTrayVisibility() {
+  const [isVisible, setIsVisible] = useState(true);
+
+  const setVisible = useCallback(async (visible: boolean) => {
+    try {
+      await setTrayVisible(visible);
+      setIsVisible(visible);
+      return true;
+    } catch (error) {
+      console.error('Failed to set tray visibility:', error);
+      return false;
+    }
+  }, []);
+
+  return { isVisible, setVisible };
+}
+
+/**
+ * Combined hook for all general settings with native integration
+ */
+export function useGeneralSettingsWithNative() {
+  const settings = useSettings();
+  const updateGeneral = useUpdateGeneralSettings();
+  const { isEnabled: autostartEnabled, toggle: toggleAutostart, isLoading: autostartLoading } = useAutostart();
+  const applyTheme = useApplyTheme();
+  const { isVisible: trayVisible, setVisible: setTrayVisible } = useTrayVisibility();
+  const appInfo = useAppInfo();
+
+  // Sync theme when settings change
+  useEffect(() => {
+    if (settings.data?.general.theme) {
+      applyTheme(settings.data.general.theme);
+    }
+  }, [settings.data?.general.theme, applyTheme]);
+
+  const updateSetting = useCallback(async <K extends keyof GeneralSettings>(
+    key: K,
+    value: GeneralSettings[K]
+  ) => {
+    if (!settings.data) return;
+
+    const newSettings = { ...settings.data.general, [key]: value };
+
+    // Handle native settings
+    if (key === 'startOnBoot') {
+      await toggleAutostart(value as boolean);
+    }
+    if (key === 'theme') {
+      await applyTheme(value as 'dark' | 'light' | 'system');
+    }
+    if (key === 'showInTray') {
+      await setTrayVisible(value as boolean);
+    }
+
+    // Update backend
+    await updateGeneral.mutateAsync(newSettings);
+  }, [settings.data, updateGeneral, toggleAutostart, applyTheme, setTrayVisible]);
+
+  return {
+    settings: settings.data?.general,
+    isLoading: settings.isLoading || autostartLoading,
+    error: settings.error,
+    updateSetting,
+    appInfo: appInfo.data,
+    autostartEnabled,
+    trayVisible,
+    isTauri: isTauri(),
+  };
 }

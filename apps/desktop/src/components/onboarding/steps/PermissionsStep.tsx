@@ -2,7 +2,9 @@
  * Permissions Step - Request system permissions
  */
 import { motion } from 'framer-motion';
-import { Shield, Camera, Rocket, Check, AlertCircle } from 'lucide-react';
+import { Shield, Camera, Rocket, Check, AlertCircle, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { isTauri } from '@/lib/tauri';
 
 interface PermissionsStepProps {
   accessibility: boolean;
@@ -14,14 +16,22 @@ interface PermissionsStepProps {
   onNext: () => void;
 }
 
+interface PermissionStatus {
+  granted: boolean;
+  can_request: boolean;
+}
+
 interface PermissionItemProps {
   icon: typeof Shield;
   title: string;
   description: string;
   whyNeeded: string;
   checked: boolean;
-  onChange: (checked: boolean) => void;
+  onChange: () => void;
   required?: boolean;
+  isLoading?: boolean;
+  isNativePermission?: boolean;
+  platform?: string;
 }
 
 function PermissionItem({
@@ -32,6 +42,9 @@ function PermissionItem({
   checked,
   onChange,
   required,
+  isLoading,
+  isNativePermission,
+  platform,
 }: PermissionItemProps) {
   return (
     <motion.div
@@ -41,7 +54,7 @@ function PermissionItem({
           ? 'border-accent bg-accent/10'
           : 'border-white/10 bg-white/5 hover:border-white/20'
       }`}
-      onClick={() => onChange(!checked)}
+      onClick={onChange}
     >
       <div className="flex items-start gap-4">
         <div
@@ -60,6 +73,12 @@ function PermissionItem({
                 Recommended
               </span>
             )}
+            {isNativePermission && platform === 'macos' && !checked && (
+              <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 text-xs flex items-center gap-1">
+                <ExternalLink size={10} />
+                Opens Settings
+              </span>
+            )}
           </div>
           <p className="text-white/50 text-sm mt-1">{description}</p>
           <p className="text-white/30 text-xs mt-2 flex items-start gap-1">
@@ -72,10 +91,16 @@ function PermissionItem({
           className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
             checked
               ? 'border-accent bg-accent'
+              : isLoading
+              ? 'border-blue-400 bg-blue-500/20'
               : 'border-white/30 bg-transparent'
           }`}
         >
-          {checked && <Check size={14} className="text-white" />}
+          {isLoading ? (
+            <Loader2 size={14} className="text-blue-400 animate-spin" />
+          ) : checked ? (
+            <Check size={14} className="text-white" />
+          ) : null}
         </div>
       </div>
     </motion.div>
@@ -91,15 +116,142 @@ export function PermissionsStep({
   onChangeLaunchOnStartup,
   onNext,
 }: PermissionsStepProps) {
-  const handleRequestAccessibility = () => {
-    // In a real app, this would trigger the native permission request
-    // For now, we just toggle the state
-    onChangeAccessibility(!accessibility);
+  const [platform, setPlatform] = useState<string>('unknown');
+  const [isCheckingAccessibility, setIsCheckingAccessibility] = useState(false);
+  const [isCheckingScreenRecording, setIsCheckingScreenRecording] = useState(false);
+  const [isRequestingAccessibility, setIsRequestingAccessibility] = useState(false);
+  const [isRequestingScreenRecording, setIsRequestingScreenRecording] = useState(false);
+
+  // Check permissions on mount and periodically
+  const checkPermissions = useCallback(async () => {
+    if (!isTauri()) return;
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+
+      // Check accessibility permission
+      setIsCheckingAccessibility(true);
+      try {
+        const accessibilityStatus = await invoke<PermissionStatus>('check_accessibility_permission');
+        onChangeAccessibility(accessibilityStatus.granted);
+      } catch (err) {
+        console.error('Failed to check accessibility permission:', err);
+      } finally {
+        setIsCheckingAccessibility(false);
+      }
+
+      // Check screen recording permission
+      setIsCheckingScreenRecording(true);
+      try {
+        const screenRecordingStatus = await invoke<PermissionStatus>('check_screen_recording_permission');
+        onChangeScreenRecording(screenRecordingStatus.granted);
+      } catch (err) {
+        console.error('Failed to check screen recording permission:', err);
+      } finally {
+        setIsCheckingScreenRecording(false);
+      }
+    } catch (err) {
+      console.error('Failed to check permissions:', err);
+    }
+  }, [onChangeAccessibility, onChangeScreenRecording]);
+
+  // Get platform and check permissions on mount
+  useEffect(() => {
+    const init = async () => {
+      if (!isTauri()) {
+        setPlatform('web');
+        return;
+      }
+
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const detectedPlatform = await invoke<string>('get_platform');
+        setPlatform(detectedPlatform);
+      } catch (err) {
+        console.error('Failed to get platform:', err);
+      }
+
+      // Check permissions
+      await checkPermissions();
+    };
+
+    init();
+  }, [checkPermissions]);
+
+  // Poll for permission changes while on this step (user might grant in System Preferences)
+  useEffect(() => {
+    if (!isTauri() || platform !== 'macos') return;
+
+    const interval = setInterval(() => {
+      checkPermissions();
+    }, 2000); // Check every 2 seconds
+
+    return () => clearInterval(interval);
+  }, [platform, checkPermissions]);
+
+  const handleRequestAccessibility = async () => {
+    if (!isTauri()) {
+      onChangeAccessibility(!accessibility);
+      return;
+    }
+
+    if (accessibility) {
+      // Already granted, no action needed
+      return;
+    }
+
+    setIsRequestingAccessibility(true);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('request_accessibility_permission');
+      // System Preferences will open - user grants there
+      // The polling will detect when permission is granted
+    } catch (err) {
+      console.error('Failed to request accessibility permission:', err);
+    } finally {
+      setIsRequestingAccessibility(false);
+    }
   };
 
-  const handleRequestScreenRecording = () => {
-    // In a real app, this would trigger the native permission request
-    onChangeScreenRecording(!screenRecording);
+  const handleRequestScreenRecording = async () => {
+    if (!isTauri()) {
+      onChangeScreenRecording(!screenRecording);
+      return;
+    }
+
+    if (screenRecording) {
+      // Already granted, no action needed
+      return;
+    }
+
+    setIsRequestingScreenRecording(true);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('request_screen_recording_permission');
+      // System Preferences will open - user grants there
+    } catch (err) {
+      console.error('Failed to request screen recording permission:', err);
+    } finally {
+      setIsRequestingScreenRecording(false);
+    }
+  };
+
+  const handleLaunchOnStartup = async () => {
+    if (!isTauri()) {
+      onChangeLaunchOnStartup(!launchOnStartup);
+      return;
+    }
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const newValue = !launchOnStartup;
+      await invoke('set_autostart', { enabled: newValue });
+      onChangeLaunchOnStartup(newValue);
+    } catch (err) {
+      console.error('Failed to set autostart:', err);
+      // Toggle anyway for UI feedback
+      onChangeLaunchOnStartup(!launchOnStartup);
+    }
   };
 
   return (
@@ -139,6 +291,9 @@ export function PermissionsStep({
           checked={accessibility}
           onChange={handleRequestAccessibility}
           required
+          isLoading={isCheckingAccessibility || isRequestingAccessibility}
+          isNativePermission={true}
+          platform={platform}
         />
 
         <PermissionItem
@@ -148,6 +303,9 @@ export function PermissionsStep({
           whyNeeded="Screenshots help you remember what you were working on. Stored locally only."
           checked={screenRecording}
           onChange={handleRequestScreenRecording}
+          isLoading={isCheckingScreenRecording || isRequestingScreenRecording}
+          isNativePermission={true}
+          platform={platform}
         />
 
         <PermissionItem
@@ -156,8 +314,10 @@ export function PermissionsStep({
           description="Start tracking automatically when you log in"
           whyNeeded="Ensures you never miss tracking your work sessions."
           checked={launchOnStartup}
-          onChange={onChangeLaunchOnStartup}
+          onChange={handleLaunchOnStartup}
           required
+          isNativePermission={false}
+          platform={platform}
         />
       </motion.div>
 
@@ -188,21 +348,46 @@ export function PermissionsStep({
         transition={{ delay: 0.5 }}
         className="text-white/40 text-xs mb-6 max-w-md mx-auto"
       >
-        <p>
-          On macOS, you may be prompted to grant permissions in System Settings.
-          Follow the on-screen instructions.
-        </p>
+        {platform === 'macos' ? (
+          <div className="space-y-2">
+            <p>
+              Click on a permission to open System Settings. After granting access,
+              the status will update automatically.
+            </p>
+            <button
+              onClick={checkPermissions}
+              className="inline-flex items-center gap-1 text-accent hover:text-accent/80 transition-colors"
+            >
+              <RefreshCw size={12} />
+              Refresh permission status
+            </button>
+          </div>
+        ) : platform === 'windows' ? (
+          <p>
+            Windows manages permissions automatically. Click Continue to proceed.
+          </p>
+        ) : (
+          <p>
+            Permissions will be requested when needed.
+          </p>
+        )}
       </motion.div>
 
-      {/* Continue Button */}
+      {/* Continue Button - Glass green 3D button */}
       <motion.button
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.6 }}
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
+        whileHover={{ scale: 1.02, y: -3 }}
+        whileTap={{ scale: 0.98, y: 0 }}
         onClick={onNext}
-        className="px-8 py-3 rounded-xl bg-gradient-to-r from-accent to-purple-500 text-white font-medium hover:opacity-90 transition-opacity"
+        className="px-10 py-4 rounded-2xl text-white font-semibold transition-all"
+        style={{
+          background: 'rgba(16, 185, 129, 0.85)',
+          backdropFilter: 'blur(12px)',
+          boxShadow: '0 8px 32px rgba(16, 185, 129, 0.35), 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.2), inset 0 -2px 4px rgba(0, 0, 0, 0.15)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+        }}
       >
         Continue
       </motion.button>

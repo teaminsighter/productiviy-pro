@@ -48,6 +48,48 @@
       font-size: 16px;
     }
 
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .status-dot.online {
+      background: #22c55e;
+      box-shadow: 0 0 6px #22c55e;
+    }
+
+    .status-dot.offline {
+      background: #f59e0b;
+      box-shadow: 0 0 6px #f59e0b;
+    }
+
+    .status-dot.syncing {
+      background: #3b82f6;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
     .tracking-toggle {
       display: flex;
       align-items: center;
@@ -90,6 +132,8 @@
       border-radius: 12px;
       padding: 16px;
       margin-bottom: 20px;
+      position: relative;
+      min-height: 100px;
     }
 
     .activity-label {
@@ -117,6 +161,87 @@
       font-weight: 700;
       color: #818cf8;
       margin-top: 12px;
+    }
+
+    /* Loading states */
+    .loading-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100px;
+    }
+
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      margin-top: 12px;
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
+    /* Sync status banner */
+    .sync-banner {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      margin-bottom: 16px;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+
+    .sync-banner.show {
+      display: flex;
+    }
+
+    .sync-banner.pending {
+      background: rgba(251, 191, 36, 0.1);
+      border: 1px solid rgba(251, 191, 36, 0.3);
+      color: #fbbf24;
+    }
+
+    .sync-banner.syncing {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #3b82f6;
+    }
+
+    .sync-banner.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #ef4444;
+    }
+
+    .sync-btn {
+      background: none;
+      border: 1px solid currentColor;
+      padding: 4px 8px;
+      border-radius: 4px;
+      color: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .sync-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .sync-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
 
     .stats-grid {
@@ -194,12 +319,17 @@
       transition: all 0.2s;
     }
 
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     .btn-primary {
       background: linear-gradient(135deg, #6366f1, #8b5cf6);
       color: white;
     }
 
-    .btn-primary:hover {
+    .btn-primary:hover:not(:disabled) {
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
     }
@@ -209,7 +339,7 @@
       color: white;
     }
 
-    .btn-secondary:hover {
+    .btn-secondary:hover:not(:disabled) {
       background: rgba(255, 255, 255, 0.15);
     }
 
@@ -245,12 +375,87 @@
       color: #ef4444;
       font-size: 12px;
       margin-bottom: 12px;
+      padding: 8px 12px;
+      background: rgba(239, 68, 68, 0.1);
+      border-radius: 6px;
+      display: none;
+    }
+
+    .error.show {
+      display: block;
     }
 
     .not-tracking {
       text-align: center;
       padding: 40px 20px;
       color: #6b7280;
+    }
+
+    /* Skeleton loaders */
+    .skeleton {
+      background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .skeleton-text {
+      height: 14px;
+      margin-bottom: 8px;
+    }
+
+    .skeleton-text.short {
+      width: 60%;
+    }
+
+    .skeleton-text.medium {
+      width: 80%;
+    }
+
+    .skeleton-time {
+      height: 28px;
+      width: 100px;
+      margin-top: 12px;
+    }
+
+    /* Toast notifications */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .toast.success {
+      background: #22c55e;
+      color: white;
+    }
+
+    .toast.error {
+      background: #ef4444;
+      color: white;
+    }
+
+    .toast.info {
+      background: #3b82f6;
+      color: white;
     }
   </style>
 </head>
@@ -265,27 +470,52 @@
         </div>
         <span class="logo-text">Productify Pro</span>
       </div>
-      <div class="tracking-toggle">
-        <span style="font-size: 12px; color: #9ca3af;">Tracking</span>
-        <div class="toggle active" id="trackingToggle"></div>
+      <div class="header-right">
+        <div class="status-indicator" id="networkStatus">
+          <div class="status-dot online" id="statusDot"></div>
+          <span id="statusText">Online</span>
+        </div>
+        <div class="tracking-toggle">
+          <div class="toggle active" id="trackingToggle"></div>
+        </div>
       </div>
     </div>
 
+    <!-- Sync Status Banner -->
+    <div class="sync-banner" id="syncBanner">
+      <span id="syncBannerText">3 items pending sync</span>
+      <button class="sync-btn" id="syncNowBtn">Sync Now</button>
+    </div>
+
     <div id="mainContent">
-      <div class="current-activity">
+      <div class="current-activity" id="activityCard">
         <div class="activity-label">Currently Tracking</div>
-        <div class="activity-title" id="activityTitle">Loading...</div>
-        <div class="activity-domain" id="activityDomain">-</div>
-        <div class="activity-time" id="activityTime">00:00</div>
+        <div id="activityContent">
+          <div class="loading-container" id="activityLoading">
+            <div class="spinner"></div>
+            <div class="loading-text">Loading activity...</div>
+          </div>
+          <div id="activityData" style="display: none;">
+            <div class="activity-title" id="activityTitle">Loading...</div>
+            <div class="activity-domain" id="activityDomain">-</div>
+            <div class="activity-time" id="activityTime">00:00</div>
+          </div>
+        </div>
       </div>
 
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-value" id="totalTime">0h</div>
+          <div class="stat-value" id="totalTime">
+            <span class="skeleton skeleton-text short" id="totalTimeSkeleton"></span>
+            <span id="totalTimeValue" style="display: none;">0h</span>
+          </div>
           <div class="stat-label">Today</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value" id="topCategory">-</div>
+          <div class="stat-value" id="topCategory">
+            <span class="skeleton skeleton-text short" id="topCategorySkeleton"></span>
+            <span id="topCategoryValue" style="display: none;">-</span>
+          </div>
           <div class="stat-label">Top Category</div>
         </div>
       </div>
@@ -294,8 +524,13 @@
         <div class="section-title">Top Sites Today</div>
         <div id="topSitesList">
           <div class="site-item">
-            <span class="site-name">Loading...</span>
-            <span class="site-time">-</span>
+            <span class="skeleton skeleton-text medium"></span>
+          </div>
+          <div class="site-item">
+            <span class="skeleton skeleton-text short"></span>
+          </div>
+          <div class="site-item">
+            <span class="skeleton skeleton-text medium"></span>
           </div>
         </div>
       </div>
@@ -307,13 +542,33 @@
     </div>
 
     <div class="login-form" id="loginForm">
-      <div class="section-title">Sign in to sync your data</div>
-      <input type="email" class="input" id="email" placeholder="Email">
-      <input type="password" class="input" id="password" placeholder="Password">
-      <div class="error" id="loginError"></div>
-      <button class="btn btn-primary" id="loginBtn" style="width: 100%;">Sign In</button>
+      <!-- Link Code Option (Recommended) -->
+      <div id="linkCodeSection">
+        <div class="section-title">Link with Desktop App</div>
+        <p style="font-size: 12px; color: #9ca3af; margin-bottom: 12px;">
+          Open Desktop App → Settings → "Link Extension" to get a code
+        </p>
+        <input type="text" class="input" id="linkCode" placeholder="Enter 6-digit code" maxlength="6" style="text-transform: uppercase; text-align: center; font-size: 18px; letter-spacing: 4px;">
+        <div class="error" id="linkError"></div>
+        <button class="btn btn-primary" id="linkBtn" style="width: 100%;">Link Extension</button>
+
+        <div style="text-align: center; margin: 16px 0; color: #6b7280; font-size: 12px;">
+          — or sign in manually —
+        </div>
+      </div>
+
+      <!-- Manual Login -->
+      <div id="manualLoginSection">
+        <input type="email" class="input" id="email" placeholder="Email">
+        <input type="password" class="input" id="password" placeholder="Password">
+        <div class="error" id="loginError"></div>
+        <button class="btn btn-primary" id="loginBtn" style="width: 100%;">Sign In</button>
+      </div>
     </div>
   </div>
+
+  <!-- Toast notification -->
+  <div class="toast" id="toast"></div>
 
   <script src="popup.js"></script>
 </body>

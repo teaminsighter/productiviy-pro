@@ -21,11 +21,12 @@
         "center": true,
         "decorations": true,
         "transparent": false,
-        "fullscreen": false
+        "fullscreen": false,
+        "devtools": true
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' http://localhost:8000 https://api.productifypro.com https://api.stripe.com wss://localhost:8000; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:"
+      "csp": null
     },
     "trayIcon": {
       "iconPath": "icons/icon.png",
@@ -42,14 +43,14 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": [],
+    "resources": ["resources/bin/*"],
     "copyright": "© 2024 Productify Pro",
     "category": "Productivity",
     "publisher": "Productify Pro",
     "shortDescription": "AI-Powered Productivity Tracking",
     "longDescription": "Productify Pro is an AI-powered PC monitoring and productivity tracking application that helps you work smarter by analyzing your computer usage patterns.",
     "macOS": {
-      "entitlements": null,
+      "entitlements": "entitlements.plist",
       "exceptionDomain": "",
       "frameworks": [],
       "providerShortName": null,
@@ -65,8 +66,11 @@
       }
     },
     "linux": {
-      "desktop": {
-        "categories": ["Office", "Utility", "Monitor"]
+      "deb": {
+        "desktopTemplate": null
+      },
+      "appimage": {
+        "bundleMediaFramework": false
       }
     }
   },
@@ -74,17 +78,11 @@
     "shell": {
       "open": true
     },
-    "notification": {
-      "all": true
-    },
-    "autostart": {
-      "all": true
-    },
     "updater": {
       "active": true,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IFlPVVJfUFVCTElDX0tFWV9IRVJFCg==",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDBBRkY2QkVCMzBENkQwMkEKUldRcTBOWXc2MnYvQ3A4OVhzWEdWSndoSUN2Yk9FSzhhN0NxcHJRTGxvQ1FmakdSSmo5aVpCcXAK",
       "endpoints": [
-        "https://api.productifypro.com/api/updates/{{target}}/{{arch}}/{{current_version}}"
+        "https://github.com/YOUR_USERNAME/productify-pro/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

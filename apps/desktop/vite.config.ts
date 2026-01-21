@@ -30,5 +30,37 @@ export default defineConfig({
     minify: !process.env.TAURI_DEBUG ? 'esbuild' : false,
     // Produce sourcemaps for debug builds
     sourcemap: !!process.env.TAURI_DEBUG,
+    // Code splitting configuration for smaller bundles
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Core React libraries
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          // UI components
+          'vendor-ui': [
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-dropdown-menu',
+            '@radix-ui/react-tabs',
+            '@radix-ui/react-select',
+            '@radix-ui/react-switch',
+            '@radix-ui/react-tooltip',
+            '@radix-ui/react-avatar',
+            '@radix-ui/react-progress',
+            '@radix-ui/react-slider',
+            '@radix-ui/react-toast',
+          ],
+          // Charts library (heavy)
+          'vendor-charts': ['recharts'],
+          // State & data management
+          'vendor-data': ['zustand', '@tanstack/react-query', 'axios'],
+          // Utilities
+          'vendor-utils': ['date-fns', 'clsx', 'tailwind-merge', 'class-variance-authority'],
+          // Animation
+          'vendor-animation': ['framer-motion'],
+        },
+      },
+    },
+    // Increase chunk size warning limit
+    chunkSizeWarningLimit: 500,
   },
 });

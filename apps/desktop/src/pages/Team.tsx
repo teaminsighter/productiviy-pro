@@ -1,19 +1,37 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Users, UserPlus, Settings, Shield,
   MoreVertical, Mail, Trash2, Eye, EyeOff, Clock,
-  TrendingUp, Activity, Plus, X, Loader2, AlertCircle
+  TrendingUp, Activity, Plus, X, Loader2, AlertCircle,
+  Monitor, CheckCircle2, Copy, Brain, Github, GitCommit,
+  GitPullRequest, Code2
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useTeamStore } from '@/stores/teamStore';
 import { useAuthStore } from '@/stores/authStore';
 import { GlassCard } from '@/components/common/GlassCard';
+import { getTeamGitHubActivity } from '@/lib/api/integrations';
+
+// Format duration in hours and minutes
+function formatDuration(seconds: number): string {
+  if (!seconds || seconds < 0) return '0m';
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
 
 export default function Team() {
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const {
-    teams, currentTeam, members, invites, isLoading, error,
-    fetchTeams, setCurrentTeam, fetchInvites,
+    teams, currentTeam, members, invites, dashboard, myPermissions, isLoading, error,
+    fetchTeams, setCurrentTeam, fetchInvites, fetchDashboard, fetchMyPermissions,
     createTeam, inviteMember, removeMember, updateMemberSettings,
     cancelInvite, clearError
   } = useTeamStore();
@@ -40,11 +58,33 @@ export default function Team() {
   useEffect(() => {
     if (currentTeam) {
       fetchInvites(currentTeam.id);
+      fetchDashboard(currentTeam.id);
+      fetchMyPermissions(currentTeam.id);
     }
   }, [currentTeam]);
 
-  const isAdmin = currentTeam && members.some(
-    m => m.user_id === user?.id && ['owner', 'admin'].includes(m.role)
+  // Refresh dashboard every 30 seconds
+  useEffect(() => {
+    if (!currentTeam) return;
+    const interval = setInterval(() => {
+      fetchDashboard(currentTeam.id);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [currentTeam]);
+
+  // Fetch team GitHub activity
+  const { data: teamGitHub } = useQuery({
+    queryKey: ['team-github-activity', currentTeam?.id],
+    queryFn: () => getTeamGitHubActivity(currentTeam!.id, 7),
+    enabled: !!currentTeam,
+    refetchInterval: 60000, // Refresh every minute
+  });
+
+  const isOwner = myPermissions?.is_owner || false;
+  const isAdmin = isOwner || myPermissions?.role === 'admin' || (
+    currentTeam && members.some(
+      m => m.user_id === user?.id && ['owner', 'admin'].includes(m.role)
+    )
   );
 
   const handleCreateTeam = async () => {
@@ -67,51 +107,78 @@ export default function Team() {
     if (!currentTeam || !inviteEmail) return;
     setActionLoading('invite');
     try {
-      await inviteMember(currentTeam.id, inviteEmail, inviteRole);
+      const result = await inviteMember(currentTeam.id, inviteEmail, inviteRole);
       setShowInviteModal(false);
       setInviteEmail('');
       setInviteRole('member');
-    } catch (err) {
-      // Error handled by store
+
+      // Show success toast with copy link option
+      toast.success(
+        <div className="flex flex-col gap-2">
+          <span>Invitation sent to {inviteEmail}</span>
+          {result?.invite_url && (
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(result.invite_url);
+                toast.success('Invite link copied to clipboard!');
+              }}
+              className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300"
+            >
+              <Copy className="w-3 h-3" />
+              Copy invite link
+            </button>
+          )}
+        </div>,
+        { duration: 5000 }
+      );
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to send invite');
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleRemoveMember = async (userId: number) => {
+  const handleRemoveMember = async (userId: number, memberName: string) => {
     if (!currentTeam) return;
-    if (!confirm('Are you sure you want to remove this member?')) return;
+    if (!confirm(`Are you sure you want to remove ${memberName} from the team?`)) return;
     setActionLoading(`remove-${userId}`);
     try {
       await removeMember(currentTeam.id, userId);
-    } catch (err) {
-      // Error handled by store
+      toast.success(`${memberName} has been removed from the team`, {
+        icon: <CheckCircle2 className="w-5 h-5 text-green-400" />,
+      });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to remove member');
     } finally {
       setActionLoading(null);
       setOpenDropdown(null);
     }
   };
 
-  const handlePromoteToAdmin = async (userId: number) => {
+  const handlePromoteToAdmin = async (userId: number, memberName: string) => {
     if (!currentTeam) return;
     setActionLoading(`promote-${userId}`);
     try {
       await updateMemberSettings(currentTeam.id, userId, { role: 'admin' });
-    } catch (err) {
-      // Error handled by store
+      toast.success(`${memberName} is now an admin`, {
+        icon: <Shield className="w-5 h-5 text-indigo-400" />,
+      });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to promote member');
     } finally {
       setActionLoading(null);
       setOpenDropdown(null);
     }
   };
 
-  const handleCancelInvite = async (inviteId: number) => {
+  const handleCancelInvite = async (inviteId: number, email: string) => {
     if (!currentTeam) return;
     setActionLoading(`cancel-${inviteId}`);
     try {
       await cancelInvite(currentTeam.id, inviteId);
-    } catch (err) {
-      // Error handled by store
+      toast.success(`Invitation to ${email} cancelled`);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to cancel invite');
     } finally {
       setActionLoading(null);
     }
@@ -204,13 +271,24 @@ export default function Team() {
         {isAdmin && (
           <div className="flex gap-3">
             <button
+              onClick={() => navigate('/team/deepwork')}
+              className="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 rounded-lg font-medium flex items-center gap-2 transition-all"
+            >
+              <Brain className="w-4 h-4" />
+              Deep Work Dashboard
+            </button>
+            <button
               onClick={() => setShowInviteModal(true)}
               className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 rounded-lg font-medium flex items-center gap-2 transition-colors"
             >
               <UserPlus className="w-4 h-4" />
               Invite Member
             </button>
-            <button className="p-2 hover:bg-gray-700 rounded-lg transition-colors">
+            <button
+              onClick={() => navigate('/team/settings')}
+              className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+              title="Team Settings"
+            >
               <Settings className="w-5 h-5" />
             </button>
           </div>
@@ -225,7 +303,7 @@ export default function Team() {
               <Users className="w-5 h-5 text-blue-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{members.length}</p>
+              <p className="text-2xl font-bold">{(dashboard as any)?.stats?.total_members || members.length || 0}</p>
               <p className="text-xs text-gray-400">Members</p>
             </div>
           </div>
@@ -236,8 +314,8 @@ export default function Team() {
               <Activity className="w-5 h-5 text-green-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{members.filter(m => m.share_activity).length}</p>
-              <p className="text-xs text-gray-400">Sharing Activity</p>
+              <p className="text-2xl font-bold">{(dashboard as any)?.stats?.active_today || 0}</p>
+              <p className="text-xs text-gray-400">Active Now</p>
             </div>
           </div>
         </GlassCard>
@@ -247,8 +325,10 @@ export default function Team() {
               <Clock className="w-5 h-5 text-purple-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold">--</p>
-              <p className="text-xs text-gray-400">Team Hours Today</p>
+              <p className="text-2xl font-bold">
+                {formatDuration(((dashboard as any)?.stats?.total_hours_today || 0) * 3600)}
+              </p>
+              <p className="text-xs text-gray-400">Productive Today</p>
             </div>
           </div>
         </GlassCard>
@@ -258,12 +338,104 @@ export default function Team() {
               <TrendingUp className="w-5 h-5 text-yellow-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold">--</p>
+              <p className="text-2xl font-bold">
+                {(dashboard as any)?.stats?.avg_productivity ? `${Math.round((dashboard as any).stats.avg_productivity)}%` : '--'}
+              </p>
               <p className="text-xs text-gray-400">Avg Productivity</p>
             </div>
           </div>
         </GlassCard>
       </div>
+
+      {/* Team GitHub Activity */}
+      {teamGitHub && (teamGitHub.totalCommits > 0 || teamGitHub.totalPrs > 0) && (
+        <GlassCard>
+          <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-gray-700 flex items-center justify-center">
+                <Github className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Team Code Activity</h3>
+                <p className="text-xs text-gray-400">Last 7 days</p>
+              </div>
+            </div>
+            <div className="flex gap-6 text-sm">
+              <div className="flex items-center gap-2">
+                <GitCommit className="w-4 h-4 text-green-400" />
+                <span className="font-bold">{teamGitHub.totalCommits}</span>
+                <span className="text-gray-400">commits</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <GitPullRequest className="w-4 h-4 text-purple-400" />
+                <span className="font-bold">{teamGitHub.totalPrs}</span>
+                <span className="text-gray-400">PRs</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Code2 className="w-4 h-4 text-blue-400" />
+                <span className="font-bold">{teamGitHub.totalReviews}</span>
+                <span className="text-gray-400">reviews</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Member contributions */}
+          <div className="divide-y divide-gray-700/50">
+            {teamGitHub.members.filter(m => m.commits > 0 || m.pullRequests > 0).map((member, index) => (
+              <div
+                key={member.userId}
+                className="p-4 flex items-center justify-between hover:bg-gray-800/30 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-xs">
+                    {member.avatarUrl ? (
+                      <img src={member.avatarUrl} className="w-full h-full rounded-full object-cover" />
+                    ) : (
+                      member.name.charAt(0).toUpperCase()
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">{member.name}</p>
+                    {index === 0 && (teamGitHub.members[0].commits > 0 || teamGitHub.members[0].pullRequests > 0) && (
+                      <span className="text-xs px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded">
+                        Top Contributor
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-6 text-sm">
+                  <div className="text-center">
+                    <p className="font-bold text-green-400">{member.commits}</p>
+                    <p className="text-xs text-gray-500">commits</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold text-purple-400">{member.pullRequests}</p>
+                    <p className="text-xs text-gray-500">PRs</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold text-blue-400">{member.reviews}</p>
+                    <p className="text-xs text-gray-500">reviews</p>
+                  </div>
+                  <div className="text-center min-w-[60px]">
+                    <p className="font-bold text-gray-300">
+                      {member.linesChanged > 1000
+                        ? `${(member.linesChanged / 1000).toFixed(1)}k`
+                        : member.linesChanged}
+                    </p>
+                    <p className="text-xs text-gray-500">lines</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {teamGitHub.members.filter(m => m.commits === 0 && m.pullRequests === 0).length > 0 && (
+              <div className="p-3 text-center text-xs text-gray-500">
+                {teamGitHub.members.filter(m => m.commits === 0 && m.pullRequests === 0).length} member(s) haven't connected GitHub yet
+              </div>
+            )}
+          </div>
+        </GlassCard>
+      )}
 
       {/* Members List */}
       <GlassCard>
@@ -276,94 +448,149 @@ export default function Team() {
           )}
         </div>
         <div className="divide-y divide-gray-700/50">
-          {members.map((member) => (
-            <motion.div
-              key={member.id}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="p-4 flex items-center justify-between hover:bg-gray-800/30 transition-colors"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-sm">
-                  {member.avatar_url ? (
-                    <img src={member.avatar_url} className="w-full h-full rounded-full object-cover" />
-                  ) : (
-                    member.name.charAt(0).toUpperCase()
-                  )}
+          {((dashboard as any)?.members || members).map((member: any) => {
+            // Get dashboard data for this member if available
+            const dashboardMember = (dashboard as any)?.members?.find((m: any) => m.user_id === member.user_id);
+            const status = dashboardMember?.status || 'offline';
+            const currentApp = dashboardMember?.current_app;
+            const todayTime = dashboardMember?.today_time || 0;
+            const productivity = dashboardMember?.productivity || 0;
+
+            const statusColors: Record<string, string> = {
+              active: 'bg-green-500',
+              idle: 'bg-yellow-500',
+              offline: 'bg-gray-500',
+            };
+
+            return (
+              <motion.div
+                key={member.user_id}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="p-4 flex items-center justify-between hover:bg-gray-800/30 transition-colors cursor-pointer"
+                onClick={() => {
+                  if (myPermissions?.can_view_activity || member.user_id === user?.id) {
+                    navigate(`/team/member/${member.user_id}`);
+                  }
+                }}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-sm">
+                      {member.avatar_url ? (
+                        <img src={member.avatar_url} className="w-full h-full rounded-full object-cover" />
+                      ) : (
+                        member.name.charAt(0).toUpperCase()
+                      )}
+                    </div>
+                    {/* Status indicator */}
+                    <div
+                      className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#1a1a1f] ${statusColors[status]}`}
+                      title={status.charAt(0).toUpperCase() + status.slice(1)}
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{member.name}</span>
+                      {getRoleBadge(member.role)}
+                      {member.user_id === user?.id && (
+                        <span className="text-xs text-gray-500">(you)</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-400">
+                      {currentApp && status === 'active' ? (
+                        <span className="flex items-center gap-1">
+                          <Monitor className="w-3 h-3" />
+                          {currentApp}
+                        </span>
+                      ) : (
+                        <span>{member.email}</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{member.name}</span>
-                    {getRoleBadge(member.role)}
-                    {member.user_id === user?.id && (
-                      <span className="text-xs text-gray-500">(you)</span>
+
+                <div className="flex items-center gap-6">
+                  {/* Activity stats - only show if sharing */}
+                  {member.share_activity && (
+                    <div className="flex items-center gap-4 text-sm">
+                      <div className="text-right">
+                        <p className="text-gray-400">Today</p>
+                        <p className="font-medium">{formatDuration(todayTime)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-gray-400">Productivity</p>
+                        <p className={`font-medium ${
+                          productivity >= 70 ? 'text-green-400' :
+                          productivity >= 40 ? 'text-yellow-400' : 'text-gray-400'
+                        }`}>
+                          {productivity > 0 ? `${Math.round(productivity)}%` : '--'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Privacy indicators */}
+                  <div className="flex gap-2" title={member.share_activity ? 'Sharing activity' : 'Activity hidden'}>
+                    {member.share_activity ? (
+                      <Eye className="w-4 h-4 text-green-400" />
+                    ) : (
+                      <EyeOff className="w-4 h-4 text-gray-500" />
                     )}
                   </div>
-                  <p className="text-sm text-gray-400">{member.email}</p>
-                </div>
-              </div>
 
-              <div className="flex items-center gap-6">
-                {/* Privacy indicators */}
-                <div className="flex gap-2" title={member.share_activity ? 'Sharing activity' : 'Activity hidden'}>
-                  {member.share_activity ? (
-                    <Eye className="w-4 h-4 text-green-400" />
-                  ) : (
-                    <EyeOff className="w-4 h-4 text-gray-500" />
-                  )}
-                </div>
-
-                {/* Actions */}
-                {isAdmin && member.user_id !== user?.id && member.role !== 'owner' && (
-                  <div className="relative">
-                    <button
-                      onClick={() => setOpenDropdown(openDropdown === member.user_id ? null : member.user_id)}
-                      className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-                    >
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-                    <AnimatePresence>
-                      {openDropdown === member.user_id && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.95 }}
-                          className="absolute right-0 mt-1 w-48 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-10"
-                        >
-                          {member.role === 'member' && (
+                  {/* Actions */}
+                  {isAdmin && member.user_id !== user?.id && member.role !== 'owner' && (
+                    <div className="relative" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => setOpenDropdown(openDropdown === member.user_id ? null : member.user_id)}
+                        className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+                      <AnimatePresence>
+                        {openDropdown === member.user_id && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="absolute right-0 mt-1 w-48 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-10"
+                          >
+                            {member.role === 'member' && isOwner && (
+                              <button
+                                onClick={() => handlePromoteToAdmin(member.user_id, member.name)}
+                                disabled={actionLoading === `promote-${member.user_id}`}
+                                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-700 flex items-center gap-2 disabled:opacity-50"
+                              >
+                                {actionLoading === `promote-${member.user_id}` ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Shield className="w-4 h-4" />
+                                )}
+                                Make Admin
+                              </button>
+                            )}
                             <button
-                              onClick={() => handlePromoteToAdmin(member.user_id)}
-                              disabled={actionLoading === `promote-${member.user_id}`}
-                              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-700 flex items-center gap-2 disabled:opacity-50"
+                              onClick={() => handleRemoveMember(member.user_id, member.name)}
+                              disabled={actionLoading === `remove-${member.user_id}`}
+                              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-700 text-red-400 flex items-center gap-2 disabled:opacity-50"
                             >
-                              {actionLoading === `promote-${member.user_id}` ? (
+                              {actionLoading === `remove-${member.user_id}` ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
                               ) : (
-                                <Shield className="w-4 h-4" />
+                                <Trash2 className="w-4 h-4" />
                               )}
-                              Make Admin
+                              Remove
                             </button>
-                          )}
-                          <button
-                            onClick={() => handleRemoveMember(member.user_id)}
-                            disabled={actionLoading === `remove-${member.user_id}`}
-                            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-700 text-red-400 flex items-center gap-2 disabled:opacity-50"
-                          >
-                            {actionLoading === `remove-${member.user_id}` ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="w-4 h-4" />
-                            )}
-                            Remove
-                          </button>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
 
           {/* Pending Invites */}
           {invites.length > 0 && isAdmin && (
@@ -388,9 +615,10 @@ export default function Team() {
                     </div>
                   </div>
                   <button
-                    onClick={() => handleCancelInvite(invite.id)}
+                    onClick={() => handleCancelInvite(invite.id, invite.email)}
                     disabled={actionLoading === `cancel-${invite.id}`}
                     className="p-2 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-red-400 transition-colors disabled:opacity-50"
+                    title="Cancel invitation"
                   >
                     {actionLoading === `cancel-${invite.id}` ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
