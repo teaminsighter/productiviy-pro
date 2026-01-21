@@ -99,9 +99,11 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    # Seed sample data for development (SQLite only, not cloud databases)
-    if not USE_CLOUD_DB and settings.use_sqlite:
-        await seed_data()
+    # Seed sample data for development (only in local dev, skip in Docker/production)
+    # Disabled for production to avoid model compatibility issues
+    # if not USE_CLOUD_DB and settings.use_sqlite and not os.path.exists("/app"):
+    #     await seed_data()
+    pass
 
 
 async def seed_data():

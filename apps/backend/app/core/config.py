@@ -14,7 +14,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
 
     # Database
-    database_path: str = str(Path.home() / ".productify" / "data.db")
+    # Use /app/data for Docker containers, fallback to home directory for local dev
+    database_path: str = "/app/data/productify.db" if os.path.exists("/app") else str(Path.home() / ".productify" / "data.db")
 
     database_url: str = ""  # PostgreSQL URL (if empty, uses SQLite)
     use_sqlite: bool = True  # Default to SQLite for local development
@@ -28,7 +29,8 @@ class Settings(BaseSettings):
         return v
 
     # Screenshots
-    screenshots_path: str = str(Path.home() / ".productify" / "screenshots")
+    # Use /app/data for Docker containers, fallback to home directory for local dev
+    screenshots_path: str = "/app/data/screenshots" if os.path.exists("/app") else str(Path.home() / ".productify" / "screenshots")
 
     # ActivityWatch
     activitywatch_url: str = "http://localhost:5600"
