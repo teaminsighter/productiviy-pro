@@ -54,13 +54,16 @@ export function useNativeTracking(options?: UseNativeTrackingOptions): UseNative
   const [isPolling, setIsPolling] = useState(false);
   const [isAwServerRunning, setIsAwServerRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentActivity, setCurrentActivity] = useState<{
+  const [currentActivity, _setCurrentActivity] = useState<{
     app_name: string;
     window_title: string;
     idle_seconds: number;
     is_browser: boolean;
   } | null>(null);
-  const [sessionsSent, setSessionsSent] = useState(0);
+  const [sessionsSent, _setSessionsSent] = useState(0);
+  // Suppress unused variable warnings (will be used in future)
+  void _setCurrentActivity;
+  void _setSessionsSent;
   const [trackingMode, setTrackingMode] = useState<'event_based' | 'legacy' | 'none'>('none');
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const trackingStartedRef = useRef(false);

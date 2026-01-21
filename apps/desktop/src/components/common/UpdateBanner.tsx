@@ -6,10 +6,8 @@ import { useAutoUpdate } from '@/hooks/useAutoUpdate';
 export function UpdateBanner() {
   const {
     updateInfo,
-    isChecking,
     isDownloading,
     error,
-    checkForUpdates,
     downloadAndInstall,
   } = useAutoUpdate();
   const [dismissed, setDismissed] = useState(false);
