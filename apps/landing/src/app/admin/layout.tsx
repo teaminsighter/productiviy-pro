@@ -69,7 +69,7 @@ export default function AdminLayout({
 
   return (
     <div className="min-h-screen bg-gray-950 flex">
-      <aside className={`${sidebarOpen ? 'w-64' : 'w-20'\} bg-gray-900 border-r border-gray-800 transition-all duration-300 flex flex-col`}>
+      <aside className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-gray-900 border-r border-gray-800 transition-all duration-300 flex flex-col`}>
         <div className="p-4 border-b border-gray-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
@@ -91,7 +91,7 @@ export default function AdminLayout({
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
-              <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${isActive ? 'bg-indigo-500/20 text-indigo-400' : 'text-gray-400 hover:bg-gray-800 hover:text-white'\}`}>
+              <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${isActive ? 'bg-indigo-500/20 text-indigo-400' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
                 <item.icon size={20} />
                 {sidebarOpen && <span>{item.label}</span>}
                 {isActive && sidebarOpen && <ChevronRight size={16} className="ml-auto" />}
