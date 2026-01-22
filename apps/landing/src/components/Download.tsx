@@ -34,7 +34,7 @@ const platforms = [
     version: 'v1.0.0',
     size: '52 MB',
     requirements: 'macOS 11 Big Sur or later',
-    downloadUrl: `${GITHUB_RELEASES_URL}/latest/download/Productify-Pro-1.0.0.dmg`,
+    downloadUrl: `${GITHUB_RELEASES_URL}/download/v1.0.0/Productify%20Pro_1.0.0_aarch64.dmg`,
     color: 'from-gray-500 to-gray-700',
     steps: [
       'Download the DMG file',
