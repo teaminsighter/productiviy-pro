@@ -18,6 +18,7 @@ COPY . .
 
 # Set environment variables for build
 ENV NEXT_PUBLIC_API_URL=https://api.productifypro.insighter.digital
+ENV NEXT_PUBLIC_ADMIN_PASSWORD=ProductifySecure2024!
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Build the application

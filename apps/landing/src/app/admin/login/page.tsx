@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Shield, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://productifypro.insighter.digital';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.productifypro.insighter.digital';
+const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'productify2024';
 
 export default function AdminLogin() {
   const [password, setPassword] = useState('');
@@ -34,8 +35,8 @@ export default function AdminLogin() {
       }
     } catch (err) {
       // Fallback to client-side check if API unavailable
-      if (password === 'productify2024') {
-        localStorage.setItem('admin_token', 'productify2024');
+      if (password === ADMIN_PASSWORD) {
+        localStorage.setItem('admin_token', 'admin_authenticated');
         router.push('/admin');
       } else {
         setError('Invalid password');
