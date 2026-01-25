@@ -1,5 +1,6 @@
 // Prevents additional console window on Windows in release
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// Temporarily disabled to see error messages on Windows
+// #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod activity_tracker;
 mod aw_server;
@@ -11,7 +12,13 @@ use state::AppStateWrapper;
 use tauri::Manager;
 
 fn main() {
-    tauri::Builder::default()
+    // Enable logging for debugging
+    #[cfg(debug_assertions)]
+    {
+        eprintln!("[Main] Starting Productify Pro...");
+    }
+
+    let result = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(
@@ -22,55 +29,70 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppStateWrapper::new())
         .setup(|app| {
-            // Create system tray
-            let _tray = tray::create_tray(app.handle())?;
+            eprintln!("[Setup] Starting app setup...");
 
-            // Start the bundled aw-server-rust
-            let app_handle = app.handle().clone();
-            std::thread::spawn(move || {
-                match aw_server::start_aw_server(&app_handle) {
-                    Ok(_) => println!("[Setup] aw-server-rust started successfully"),
-                    Err(e) => eprintln!("[Setup] Failed to start aw-server-rust: {}", e),
-                }
-            });
+            // Create system tray (non-fatal if it fails on Windows)
+            match tray::create_tray(app.handle()) {
+                Ok(_tray) => eprintln!("[Setup] Tray created successfully"),
+                Err(e) => eprintln!("[Setup] Warning: Failed to create tray: {}", e),
+            }
+
+            // Start the bundled aw-server-rust (only on macOS/Linux for now)
+            #[cfg(not(target_os = "windows"))]
+            {
+                let app_handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    match aw_server::start_aw_server(&app_handle) {
+                        Ok(_) => eprintln!("[Setup] aw-server-rust started successfully"),
+                        Err(e) => eprintln!("[Setup] Failed to start aw-server-rust: {}", e),
+                    }
+                });
+            }
 
             // Handle window close - check user preference
-            let window = app.get_webview_window("main").unwrap();
-            let window_clone = window.clone();
-            let app_handle = app.handle().clone();
+            if let Some(window) = app.get_webview_window("main") {
+                eprintln!("[Setup] Main window found, setting up close handler...");
+                let window_clone = window.clone();
+                let app_handle = app.handle().clone();
 
-            window.on_window_event(move |event| {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    use tauri_plugin_store::StoreExt;
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        use tauri_plugin_store::StoreExt;
 
-                    // Check user preference from store
-                    let close_to_tray = match app_handle.store("settings.json") {
-                        Ok(store) => match store.get("closeToTray") {
-                            Some(serde_json::Value::Bool(value)) => value,
-                            _ => true, // Default to close-to-tray
-                        },
-                        Err(_) => true, // Default to close-to-tray on error
-                    };
+                        // Check user preference from store
+                        let close_to_tray = match app_handle.store("settings.json") {
+                            Ok(store) => match store.get("closeToTray") {
+                                Some(serde_json::Value::Bool(value)) => value,
+                                _ => true, // Default to close-to-tray
+                            },
+                            Err(_) => true, // Default to close-to-tray on error
+                        };
 
-                    if close_to_tray {
-                        // Prevent closing, hide to tray instead
-                        api.prevent_close();
-                        let _ = window_clone.hide();
+                        if close_to_tray {
+                            // Prevent closing, hide to tray instead
+                            api.prevent_close();
+                            let _ = window_clone.hide();
+                        }
+                        // If close_to_tray is false, let the window close normally (app quits)
                     }
-                    // If close_to_tray is false, let the window close normally (app quits)
-                }
-            });
+                });
+            } else {
+                eprintln!("[Setup] Warning: Main window not found!");
+            }
 
-            // Register global shortcut for focus mode toggle
+            // Register global shortcut for focus mode toggle (non-fatal if it fails)
             #[cfg(desktop)]
             {
                 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
 
-                // Cmd+Shift+F to toggle focus mode
+                // Cmd+Shift+F (Mac) or Ctrl+Shift+F (Windows) to toggle focus mode
+                #[cfg(target_os = "macos")]
                 let focus_shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyF);
+                #[cfg(not(target_os = "macos"))]
+                let focus_shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyF);
 
                 let app_handle = app.handle().clone();
-                app.handle().plugin(
+                if let Err(e) = app.handle().plugin(
                     tauri_plugin_global_shortcut::Builder::new()
                         .with_handler(move |_app, shortcut, _event| {
                             if shortcut == &focus_shortcut {
@@ -85,12 +107,19 @@ fn main() {
                             }
                         })
                         .build(),
-                )?;
+                ) {
+                    eprintln!("[Setup] Warning: Failed to register shortcut plugin: {}", e);
+                }
 
-                // Register the shortcut
-                app.global_shortcut().register(focus_shortcut)?;
+                // Register the shortcut (non-fatal if it fails)
+                if let Err(e) = app.global_shortcut().register(focus_shortcut) {
+                    eprintln!("[Setup] Warning: Failed to register focus shortcut: {}", e);
+                } else {
+                    eprintln!("[Setup] Focus shortcut registered successfully");
+                }
             }
 
+            eprintln!("[Setup] App setup completed successfully!");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -160,6 +189,21 @@ fn main() {
             commands::get_event_tracker_state,
             commands::finalize_current_session,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .run(tauri::generate_context!());
+
+    match result {
+        Ok(_) => eprintln!("[Main] App exited normally"),
+        Err(e) => {
+            eprintln!("[Main] Error running application: {}", e);
+            // On Windows, show a message box with the error
+            #[cfg(target_os = "windows")]
+            {
+                use std::process::Command;
+                let _ = Command::new("msg")
+                    .args(["%username%", &format!("Productify Pro Error: {}", e)])
+                    .spawn();
+            }
+            std::process::exit(1);
+        }
+    }
 }
