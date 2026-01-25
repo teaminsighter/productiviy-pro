@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { AnimatePresence } from 'framer-motion';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
-import { Suspense, lazy } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { Layout } from '@/components/layout/Layout';
@@ -166,9 +166,23 @@ function AppRoutes() {
   );
 }
 
+// Wrapper component that conditionally includes Google OAuth
+function GoogleOAuthWrapper({ children }: { children: React.ReactNode }) {
+  // Only wrap with GoogleOAuthProvider if client ID is provided
+  if (GOOGLE_CLIENT_ID) {
+    return (
+      <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+        {children}
+      </GoogleOAuthProvider>
+    );
+  }
+  // If no Google client ID, render children without the provider
+  return <>{children}</>;
+}
+
 function App() {
   return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+    <GoogleOAuthWrapper>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider defaultTheme="dark">
           <NotificationProvider>
@@ -185,7 +199,7 @@ function App() {
           </NotificationProvider>
         </ThemeProvider>
       </QueryClientProvider>
-    </GoogleOAuthProvider>
+    </GoogleOAuthWrapper>
   );
 }
 
