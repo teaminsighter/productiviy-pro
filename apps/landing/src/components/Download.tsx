@@ -11,6 +11,7 @@ const CHROME_WEBSTORE_URL = 'https://chrome.google.com/webstore/detail/productif
 type Platform = 'windows' | 'macos' | 'chrome' | 'unknown';
 
 const VERSION = '1.0.1';
+const APP_VERSION = '1.0.0'; // Version in tauri.conf.json
 
 const platforms = [
   {
@@ -18,13 +19,13 @@ const platforms = [
     name: 'Windows',
     icon: Monitor,
     version: `v${VERSION}`,
-    size: '45 MB',
+    size: '15 MB',
     requirements: 'Windows 10 or later',
-    downloadUrl: `${GITHUB_RELEASES_URL}/download/v${VERSION}/Productify.Pro_${VERSION}_x64-setup.exe`,
+    downloadUrl: `${GITHUB_RELEASES_URL}/download/v${VERSION}/Productify.Pro_${APP_VERSION}_x64_en-US.msi`,
     color: 'from-blue-500 to-cyan-500',
     steps: [
       'Download the installer',
-      'Run the setup file',
+      'Run the MSI file',
       'Follow installation wizard',
       'Sign in and start tracking',
     ],
@@ -36,7 +37,7 @@ const platforms = [
     version: `v${VERSION}`,
     size: '52 MB',
     requirements: 'macOS 11 Big Sur or later',
-    downloadUrl: `${GITHUB_RELEASES_URL}/download/v${VERSION}/Productify.Pro_${VERSION}_aarch64.dmg`,
+    downloadUrl: `${GITHUB_RELEASES_URL}/download/v${VERSION}/Productify.Pro_${APP_VERSION}_aarch64.dmg`,
     color: 'from-gray-500 to-gray-700',
     steps: [
       'Download the DMG file',
