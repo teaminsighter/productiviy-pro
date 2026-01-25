@@ -10,19 +10,21 @@ const CHROME_WEBSTORE_URL = 'https://chrome.google.com/webstore/detail/productif
 
 type Platform = 'windows' | 'macos' | 'chrome' | 'unknown';
 
+const VERSION = '1.0.1';
+
 const platforms = [
   {
     id: 'windows' as Platform,
     name: 'Windows',
     icon: Monitor,
-    version: 'v1.0.0',
+    version: `v${VERSION}`,
     size: '45 MB',
     requirements: 'Windows 10 or later',
-    downloadUrl: `${GITHUB_RELEASES_URL}/latest/download/Productify-Pro-Setup-1.0.0.exe`,
+    downloadUrl: `${GITHUB_RELEASES_URL}/download/v${VERSION}/Productify.Pro_${VERSION}_x64-setup.exe`,
     color: 'from-blue-500 to-cyan-500',
     steps: [
       'Download the installer',
-      'Run ProductifyPro-Setup.exe',
+      'Run the setup file',
       'Follow installation wizard',
       'Sign in and start tracking',
     ],
@@ -31,15 +33,15 @@ const platforms = [
     id: 'macos' as Platform,
     name: 'macOS',
     icon: Apple,
-    version: 'v1.0.0',
+    version: `v${VERSION}`,
     size: '52 MB',
     requirements: 'macOS 11 Big Sur or later',
-    downloadUrl: `${GITHUB_RELEASES_URL}/download/v1.0.0/Productify.Pro_1.0.0_aarch64.dmg`,
+    downloadUrl: `${GITHUB_RELEASES_URL}/download/v${VERSION}/Productify.Pro_${VERSION}_aarch64.dmg`,
     color: 'from-gray-500 to-gray-700',
     steps: [
       'Download the DMG file',
       'Open and drag to Applications',
-      'Grant accessibility permissions',
+      'Run: xattr -cr /Applications/Productify\\ Pro.app',
       'Sign in and start tracking',
     ],
   },
@@ -47,7 +49,7 @@ const platforms = [
     id: 'chrome' as Platform,
     name: 'Chrome Extension',
     icon: Chrome,
-    version: 'v1.0.0',
+    version: `v${VERSION}`,
     size: '2 MB',
     requirements: 'Chrome 90 or later',
     downloadUrl: CHROME_WEBSTORE_URL,
