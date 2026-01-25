@@ -86,6 +86,7 @@ export function useRealTimeActivity(options?: UseRealTimeActivityOptions): UseRe
   const lastActivityRef = useRef<string | null>(null);
   const lastActivityChangeRef = useRef<number>(Date.now());
   const autoPausedRef = useRef<boolean>(false);
+  const manualPausedRef = useRef<boolean>(false); // Track if user manually paused
 
   // Use ref for isTracking to avoid stale closures in tick
   const isTrackingRef = useRef<boolean>(isTracking);
@@ -156,7 +157,10 @@ export function useRealTimeActivity(options?: UseRealTimeActivityOptions): UseRe
         setTimeStats(baseStatsRef.current);
       }
 
-      setIsTracking(data.is_tracking !== false);
+      // Don't override manual pause - only sync from server if not manually paused
+      if (!manualPausedRef.current) {
+        setIsTracking(data.is_tracking !== false);
+      }
       setDataSource((data.data_source as DataSource) || 'none');
       setError(null);
     } catch (err: any) {
@@ -256,8 +260,11 @@ export function useRealTimeActivity(options?: UseRealTimeActivityOptions): UseRe
   }, [fetchCurrentState]);
 
   const toggleTracking = useCallback(() => {
-    setIsTracking(prev => !prev);
-    apiClient.post('/api/activities/toggle-tracking', { tracking: !isTracking }).catch(console.error);
+    const newTrackingState = !isTracking;
+    // Track manual pause to prevent server sync from overriding
+    manualPausedRef.current = !newTrackingState; // true when pausing, false when resuming
+    setIsTracking(newTrackingState);
+    apiClient.post('/api/activities/toggle-tracking', { tracking: newTrackingState }).catch(console.error);
   }, [isTracking]);
 
   // AFK: Dismiss warning but keep tracking
@@ -273,6 +280,7 @@ export function useRealTimeActivity(options?: UseRealTimeActivityOptions): UseRe
     setShowAfkWarning(false);
     setAfkWarningDismissed(false);
     autoPausedRef.current = false;
+    manualPausedRef.current = false; // Clear manual pause when resuming
     lastActivityChangeRef.current = Date.now();
 
     // Resume tracking if it was auto-paused
