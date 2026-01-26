@@ -110,6 +110,28 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -R artifacts
 
+      - name: Rename macOS tar.gz files to include architecture
+        run: |
+          # Rename ARM64 tar.gz
+          if [ -f "artifacts/productify-pro-macOS-ARM64/aarch64-apple-darwin/release/bundle/macos/Productify Pro.app.tar.gz" ]; then
+            mv "artifacts/productify-pro-macOS-ARM64/aarch64-apple-darwin/release/bundle/macos/Productify Pro.app.tar.gz" \
+               "artifacts/productify-pro-macOS-ARM64/aarch64-apple-darwin/release/bundle/macos/Productify Pro_aarch64.app.tar.gz"
+          fi
+          # Rename Intel tar.gz
+          if [ -f "artifacts/productify-pro-macOS-Intel/x86_64-apple-darwin/release/bundle/macos/Productify Pro.app.tar.gz" ]; then
+            mv "artifacts/productify-pro-macOS-Intel/x86_64-apple-darwin/release/bundle/macos/Productify Pro.app.tar.gz" \
+               "artifacts/productify-pro-macOS-Intel/x86_64-apple-darwin/release/bundle/macos/Productify Pro_x86_64.app.tar.gz"
+          fi
+          # Rename sig files if they exist
+          if [ -f "artifacts/productify-pro-macOS-ARM64/aarch64-apple-darwin/release/bundle/macos/Productify Pro.app.tar.gz.sig" ]; then
+            mv "artifacts/productify-pro-macOS-ARM64/aarch64-apple-darwin/release/bundle/macos/Productify Pro.app.tar.gz.sig" \
+               "artifacts/productify-pro-macOS-ARM64/aarch64-apple-darwin/release/bundle/macos/Productify Pro_aarch64.app.tar.gz.sig"
+          fi
+          if [ -f "artifacts/productify-pro-macOS-Intel/x86_64-apple-darwin/release/bundle/macos/Productify Pro.app.tar.gz.sig" ]; then
+            mv "artifacts/productify-pro-macOS-Intel/x86_64-apple-darwin/release/bundle/macos/Productify Pro.app.tar.gz.sig" \
+               "artifacts/productify-pro-macOS-Intel/x86_64-apple-darwin/release/bundle/macos/Productify Pro_x86_64.app.tar.gz.sig"
+          fi
+
       - name: Get version from tag
         id: version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
@@ -119,37 +141,41 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           RELEASE_URL="https://github.com/teaminsighter/productiviy-pro/releases/download/v${VERSION}"
 
-          # Find signature files
+          # Find and read signature files using find for recursive search
           WIN_SIG=""
           MAC_ARM_SIG=""
           MAC_INTEL_SIG=""
           LINUX_SIG=""
 
-          # Read Windows signature
-          if [ -f "artifacts/productify-pro-Windows/"*".exe.sig" ]; then
-            WIN_SIG=$(cat artifacts/productify-pro-Windows/*.exe.sig 2>/dev/null || echo "")
+          # Read Windows signature (MSI)
+          WIN_SIG_FILE=$(find artifacts/productify-pro-Windows -name "*.msi.sig" 2>/dev/null | head -1)
+          if [ -n "$WIN_SIG_FILE" ] && [ -f "$WIN_SIG_FILE" ]; then
+            WIN_SIG=$(cat "$WIN_SIG_FILE" 2>/dev/null || echo "")
           fi
 
           # Read macOS ARM64 signature
-          if [ -f "artifacts/productify-pro-macOS-ARM64/"*".app.tar.gz.sig" ]; then
-            MAC_ARM_SIG=$(cat artifacts/productify-pro-macOS-ARM64/*.app.tar.gz.sig 2>/dev/null || echo "")
+          MAC_ARM_SIG_FILE=$(find artifacts/productify-pro-macOS-ARM64 -name "*_aarch64.app.tar.gz.sig" 2>/dev/null | head -1)
+          if [ -n "$MAC_ARM_SIG_FILE" ] && [ -f "$MAC_ARM_SIG_FILE" ]; then
+            MAC_ARM_SIG=$(cat "$MAC_ARM_SIG_FILE" 2>/dev/null || echo "")
           fi
 
           # Read macOS Intel signature
-          if [ -f "artifacts/productify-pro-macOS-Intel/"*".app.tar.gz.sig" ]; then
-            MAC_INTEL_SIG=$(cat artifacts/productify-pro-macOS-Intel/*.app.tar.gz.sig 2>/dev/null || echo "")
+          MAC_INTEL_SIG_FILE=$(find artifacts/productify-pro-macOS-Intel -name "*_x86_64.app.tar.gz.sig" 2>/dev/null | head -1)
+          if [ -n "$MAC_INTEL_SIG_FILE" ] && [ -f "$MAC_INTEL_SIG_FILE" ]; then
+            MAC_INTEL_SIG=$(cat "$MAC_INTEL_SIG_FILE" 2>/dev/null || echo "")
           fi
 
           # Read Linux signature
-          if [ -f "artifacts/productify-pro-Linux/"*".AppImage.sig" ]; then
-            LINUX_SIG=$(cat artifacts/productify-pro-Linux/*.AppImage.sig 2>/dev/null || echo "")
+          LINUX_SIG_FILE=$(find artifacts/productify-pro-Linux -name "*.AppImage.sig" 2>/dev/null | head -1)
+          if [ -n "$LINUX_SIG_FILE" ] && [ -f "$LINUX_SIG_FILE" ]; then
+            LINUX_SIG=$(cat "$LINUX_SIG_FILE" 2>/dev/null || echo "")
           fi
 
-          # Get filenames
-          WIN_FILE=$(ls artifacts/productify-pro-Windows/*.exe 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
-          MAC_ARM_FILE=$(ls artifacts/productify-pro-macOS-ARM64/*.app.tar.gz 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
-          MAC_INTEL_FILE=$(ls artifacts/productify-pro-macOS-Intel/*.app.tar.gz 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
-          LINUX_FILE=$(ls artifacts/productify-pro-Linux/*.AppImage 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
+          # Get filenames - use find for recursive search
+          WIN_FILE=$(find artifacts/productify-pro-Windows -name "*.msi" 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
+          MAC_ARM_FILE=$(find artifacts/productify-pro-macOS-ARM64 -name "*_aarch64.app.tar.gz" 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
+          MAC_INTEL_FILE=$(find artifacts/productify-pro-macOS-Intel -name "*_x86_64.app.tar.gz" 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
+          LINUX_FILE=$(find artifacts/productify-pro-Linux -name "*.AppImage" 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
 
           # Create latest.json
           cat > latest.json << EOF
