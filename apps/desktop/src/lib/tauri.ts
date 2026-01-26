@@ -870,3 +870,133 @@ export async function finalizeCurrentSession(): Promise<CompletedSession | null>
   }
   return invoke<CompletedSession | null>('finalize_current_session');
 }
+
+// ============ Auto-Update Commands ============
+
+export interface UpdateInfo {
+  version: string;
+  date: string;
+  body: string;
+}
+
+export interface UpdateStatus {
+  available: boolean;
+  current_version: string;
+  latest_version?: string;
+  update_info?: UpdateInfo;
+  error?: string;
+}
+
+export interface DownloadProgress {
+  downloaded: number;
+  total: number;
+  percentage: number;
+}
+
+/**
+ * Check for available updates
+ */
+export async function checkForUpdates(): Promise<UpdateStatus> {
+  if (!isTauri()) {
+    return {
+      available: false,
+      current_version: '1.0.0',
+      error: 'Updates not available in web mode',
+    };
+  }
+
+  try {
+    const { check } = await import('@tauri-apps/plugin-updater');
+    const update = await check();
+
+    if (update) {
+      return {
+        available: true,
+        current_version: update.currentVersion,
+        latest_version: update.version,
+        update_info: {
+          version: update.version,
+          date: update.date || new Date().toISOString(),
+          body: update.body || 'Bug fixes and improvements',
+        },
+      };
+    }
+
+    // Get current version from app info
+    const appInfo = await getAppInfo();
+    return {
+      available: false,
+      current_version: appInfo.version,
+    };
+  } catch (error) {
+    const appInfo = await getAppInfo().catch(() => ({ version: '1.0.0' }));
+    return {
+      available: false,
+      current_version: appInfo.version,
+      error: error instanceof Error ? error.message : 'Failed to check for updates',
+    };
+  }
+}
+
+/**
+ * Download and install update
+ */
+export async function downloadAndInstallUpdate(
+  onProgress?: (progress: DownloadProgress) => void
+): Promise<{ success: boolean; error?: string }> {
+  if (!isTauri()) {
+    return { success: false, error: 'Updates not available in web mode' };
+  }
+
+  try {
+    const { check } = await import('@tauri-apps/plugin-updater');
+    const { relaunch } = await import('@tauri-apps/plugin-process');
+
+    const update = await check();
+
+    if (!update) {
+      return { success: false, error: 'No update available' };
+    }
+
+    let downloaded = 0;
+    let contentLength = 0;
+
+    // Download the update with progress tracking
+    await update.downloadAndInstall((event) => {
+      switch (event.event) {
+        case 'Started':
+          contentLength = event.data.contentLength || 0;
+          break;
+        case 'Progress':
+          downloaded += event.data.chunkLength;
+          if (onProgress && contentLength > 0) {
+            onProgress({
+              downloaded,
+              total: contentLength,
+              percentage: Math.round((downloaded / contentLength) * 100),
+            });
+          }
+          break;
+        case 'Finished':
+          if (onProgress) {
+            onProgress({
+              downloaded: contentLength,
+              total: contentLength,
+              percentage: 100,
+            });
+          }
+          break;
+      }
+    });
+
+    // Relaunch the app to apply the update
+    await relaunch();
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to install update',
+    };
+  }
+}

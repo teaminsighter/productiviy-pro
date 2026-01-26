@@ -47,7 +47,7 @@ import {
 import RulesSettings from './settings/Rules';
 import { useSettings, useUpdateSettings, useAppInfo, useAutostart, useTrayVisibility } from '@/hooks/useSettings';
 import { useAuthStore } from '@/stores/authStore';
-import { isTauri, setCloseToTray } from '@/lib/tauri';
+import { isTauri, setCloseToTray, checkForUpdates, downloadAndInstallUpdate, UpdateStatus, DownloadProgress } from '@/lib/tauri';
 import { useTheme } from '@/hooks/useTheme';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -272,6 +272,176 @@ function TimeInput({ value, onChange }: { value: string; onChange: (value: strin
       onChange={(e) => onChange(e.target.value)}
       className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
     />
+  );
+}
+
+// Updates Section Component
+function UpdatesSection({
+  settings,
+  updateSetting,
+  appInfo,
+}: {
+  settings: SettingsState;
+  updateSetting: <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => void;
+  appInfo: { version: string; name: string; build_type: string } | undefined;
+}) {
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
+
+  const handleCheckForUpdates = async () => {
+    setChecking(true);
+    setUpdateStatus(null);
+
+    try {
+      const status = await checkForUpdates();
+      setUpdateStatus(status);
+
+      if (status.error) {
+        toast.error(status.error);
+      } else if (status.available) {
+        toast.success(`Update available: v${status.latest_version}`);
+      } else {
+        toast.success('You are running the latest version!');
+      }
+    } catch (error) {
+      toast.error('Failed to check for updates');
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleDownloadAndInstall = async () => {
+    setDownloading(true);
+    setDownloadProgress({ downloaded: 0, total: 0, percentage: 0 });
+
+    try {
+      const result = await downloadAndInstallUpdate((progress) => {
+        setDownloadProgress(progress);
+      });
+
+      if (!result.success) {
+        toast.error(result.error || 'Failed to install update');
+      }
+      // If successful, the app will relaunch automatically
+    } catch (error) {
+      toast.error('Failed to download update');
+    } finally {
+      setDownloading(false);
+      setDownloadProgress(null);
+    }
+  };
+
+  return (
+    <div className="glass-card p-6">
+      <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Updates</h3>
+      <div className="space-y-4">
+        {/* Current Version Status */}
+        <div className="flex items-center justify-between p-4 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)]">
+          <div>
+            <p className="text-[var(--text-primary)] font-medium">Current Version</p>
+            <p className="text-[var(--text-muted)] text-sm">v{appInfo?.version || '1.0.0'}</p>
+          </div>
+          {updateStatus?.available ? (
+            <div className="flex items-center gap-2 text-accent">
+              <Download size={16} />
+              <span className="text-sm">v{updateStatus.latest_version} available</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-productive">
+              <CheckCircle2 size={16} />
+              <span className="text-sm">Up to date</span>
+            </div>
+          )}
+        </div>
+
+        {/* Update Available Card */}
+        {updateStatus?.available && updateStatus.update_info && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="p-4 rounded-xl bg-accent/10 border border-accent/20"
+          >
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-accent/20">
+                <Zap className="text-accent" size={20} />
+              </div>
+              <div className="flex-1">
+                <h4 className="text-[var(--text-primary)] font-semibold">
+                  Version {updateStatus.latest_version} Available
+                </h4>
+                <p className="text-[var(--text-muted)] text-sm mt-1">
+                  {updateStatus.update_info.body}
+                </p>
+
+                {/* Download Progress */}
+                {downloading && downloadProgress && (
+                  <div className="mt-3">
+                    <div className="h-2 bg-[var(--glass-bg)] rounded-full overflow-hidden">
+                      <motion.div
+                        className="h-full bg-accent rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${downloadProgress.percentage}%` }}
+                        transition={{ duration: 0.3 }}
+                      />
+                    </div>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">
+                      Downloading... {downloadProgress.percentage}%
+                    </p>
+                  </div>
+                )}
+
+                {/* Install Button */}
+                {!downloading && (
+                  <button
+                    onClick={handleDownloadAndInstall}
+                    className="mt-3 flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent/80 transition-colors"
+                  >
+                    <Download size={16} />
+                    Download & Install
+                  </button>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Auto-update Setting */}
+        <SettingRow
+          icon={RefreshCw}
+          label="Auto-update"
+          description="Automatically download and install updates"
+        >
+          <Toggle
+            enabled={settings.autoUpdate}
+            onChange={(v) => {
+              updateSetting('autoUpdate', v);
+              toast.success(v ? 'Auto-update enabled' : 'Auto-update disabled');
+            }}
+          />
+        </SettingRow>
+
+        {/* Check for Updates Button */}
+        <button
+          onClick={handleCheckForUpdates}
+          disabled={checking || downloading}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[var(--glass-bg)] text-[var(--text-secondary)] hover:bg-[var(--glass-bg-hover)] transition-colors border border-[var(--glass-border)] disabled:opacity-50"
+        >
+          {checking ? (
+            <>
+              <Loader2 size={16} className="animate-spin" />
+              Checking...
+            </>
+          ) : (
+            <>
+              <RefreshCw size={16} />
+              Check for Updates
+            </>
+          )}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -526,49 +696,7 @@ function GeneralTab({
 
       {/* Updates Section */}
       {isTauri() && (
-        <div className="glass-card p-6">
-          <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Updates</h3>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)]">
-              <div>
-                <p className="text-[var(--text-primary)] font-medium">Current Version</p>
-                <p className="text-[var(--text-muted)] text-sm">v{appInfo?.version || '1.0.0'}</p>
-              </div>
-              <div className="flex items-center gap-2 text-productive">
-                <CheckCircle2 size={16} />
-                <span className="text-sm">Up to date</span>
-              </div>
-            </div>
-
-            <SettingRow
-              icon={RefreshCw}
-              label="Auto-update"
-              description="Automatically download and install updates"
-            >
-              <Toggle
-                enabled={settings.autoUpdate}
-                onChange={(v) => {
-                  updateSetting('autoUpdate', v);
-                  toast.success(v ? 'Auto-update enabled' : 'Auto-update disabled');
-                }}
-              />
-            </SettingRow>
-
-            <button
-              onClick={() => {
-                toast.info('Checking for updates...');
-                // In a real app, this would call Tauri updater
-                setTimeout(() => {
-                  toast.success('You are running the latest version!');
-                }, 1500);
-              }}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[var(--glass-bg)] text-[var(--text-secondary)] hover:bg-[var(--glass-bg-hover)] transition-colors border border-[var(--glass-border)]"
-            >
-              <RefreshCw size={16} />
-              Check for Updates
-            </button>
-          </div>
-        </div>
+        <UpdatesSection settings={settings} updateSetting={updateSetting} appInfo={appInfo} />
       )}
 
       {/* About Section */}
