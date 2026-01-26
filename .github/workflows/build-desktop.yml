@@ -171,11 +171,30 @@ jobs:
             LINUX_SIG=$(cat "$LINUX_SIG_FILE" 2>/dev/null || echo "")
           fi
 
-          # Get filenames - use find for recursive search
-          WIN_FILE=$(find artifacts/productify-pro-Windows -name "*.msi" 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
-          MAC_ARM_FILE=$(find artifacts/productify-pro-macOS-ARM64 -name "*_aarch64.app.tar.gz" 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
-          MAC_INTEL_FILE=$(find artifacts/productify-pro-macOS-Intel -name "*_x86_64.app.tar.gz" 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
-          LINUX_FILE=$(find artifacts/productify-pro-Linux -name "*.AppImage" 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
+          # Get filenames - use find with proper space handling
+          WIN_FILE_PATH=$(find artifacts/productify-pro-Windows -name "*.msi" 2>/dev/null | head -1)
+          WIN_FILE=$(basename "$WIN_FILE_PATH" 2>/dev/null || echo "")
+
+          MAC_ARM_FILE_PATH=$(find artifacts/productify-pro-macOS-ARM64 -name "*_aarch64.app.tar.gz" 2>/dev/null | head -1)
+          MAC_ARM_FILE=$(basename "$MAC_ARM_FILE_PATH" 2>/dev/null || echo "")
+
+          MAC_INTEL_FILE_PATH=$(find artifacts/productify-pro-macOS-Intel -name "*_x86_64.app.tar.gz" 2>/dev/null | head -1)
+          MAC_INTEL_FILE=$(basename "$MAC_INTEL_FILE_PATH" 2>/dev/null || echo "")
+
+          LINUX_FILE_PATH=$(find artifacts/productify-pro-Linux -name "*.AppImage" 2>/dev/null | head -1)
+          LINUX_FILE=$(basename "$LINUX_FILE_PATH" 2>/dev/null || echo "")
+
+          echo "Found files:"
+          echo "  Windows: $WIN_FILE"
+          echo "  macOS ARM64: $MAC_ARM_FILE"
+          echo "  macOS Intel: $MAC_INTEL_FILE"
+          echo "  Linux: $LINUX_FILE"
+
+          # URL encode filenames (replace spaces with %20)
+          WIN_FILE_URL=$(echo "$WIN_FILE" | sed 's/ /%20/g')
+          MAC_ARM_FILE_URL=$(echo "$MAC_ARM_FILE" | sed 's/ /%20/g')
+          MAC_INTEL_FILE_URL=$(echo "$MAC_INTEL_FILE" | sed 's/ /%20/g')
+          LINUX_FILE_URL=$(echo "$LINUX_FILE" | sed 's/ /%20/g')
 
           # Create latest.json
           cat > latest.json << EOF
@@ -186,19 +205,19 @@ jobs:
             "platforms": {
               "darwin-aarch64": {
                 "signature": "${MAC_ARM_SIG}",
-                "url": "${RELEASE_URL}/${MAC_ARM_FILE}"
+                "url": "${RELEASE_URL}/${MAC_ARM_FILE_URL}"
               },
               "darwin-x86_64": {
                 "signature": "${MAC_INTEL_SIG}",
-                "url": "${RELEASE_URL}/${MAC_INTEL_FILE}"
+                "url": "${RELEASE_URL}/${MAC_INTEL_FILE_URL}"
               },
               "linux-x86_64": {
                 "signature": "${LINUX_SIG}",
-                "url": "${RELEASE_URL}/${LINUX_FILE}"
+                "url": "${RELEASE_URL}/${LINUX_FILE_URL}"
               },
               "windows-x86_64": {
                 "signature": "${WIN_SIG}",
-                "url": "${RELEASE_URL}/${WIN_FILE}"
+                "url": "${RELEASE_URL}/${WIN_FILE_URL}"
               }
             }
           }
