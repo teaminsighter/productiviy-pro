@@ -139,7 +139,8 @@ jobs:
       - name: Generate latest.json for updater
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          RELEASE_URL="https://github.com/teaminsighter/productiviy-pro/releases/download/v${VERSION}"
+          # Use the public releases repo for download URLs
+          RELEASE_URL="https://github.com/teaminsighter/productify-pro-releases/releases/download/v${VERSION}"
 
           # Find and read signature files using find for recursive search
           WIN_SIG=""
@@ -227,9 +228,10 @@ jobs:
           cat latest.json
           echo "latest.json generated successfully"
 
-      - name: Create Release
+      - name: Create Release on Public Releases Repo
         uses: softprops/action-gh-release@v1
         with:
+          repository: teaminsighter/productify-pro-releases
           files: |
             artifacts/**/*.dmg
             artifacts/**/*.exe
@@ -240,5 +242,16 @@ jobs:
             artifacts/**/*.sig
             latest.json
           generate_release_notes: true
+          body: |
+            ## Productify Pro v${{ steps.version.outputs.version }}
+
+            Download the installer for your platform below.
+
+            ### Downloads
+            - **macOS (Apple Silicon)**: `Productify.Pro_${{ steps.version.outputs.version }}_aarch64.dmg`
+            - **macOS (Intel)**: `Productify.Pro_${{ steps.version.outputs.version }}_x64.dmg`
+            - **Windows**: `Productify.Pro_${{ steps.version.outputs.version }}_x64_en-US.msi`
+            - **Linux (AppImage)**: `Productify.Pro_${{ steps.version.outputs.version }}_amd64.AppImage`
+            - **Linux (Debian)**: `Productify.Pro_${{ steps.version.outputs.version }}_amd64.deb`
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}

@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/v2/tooling/cli/schema.json",
   "productName": "Productify Pro",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "identifier": "com.productifypro.app",
   "build": {
     "beforeBuildCommand": "npm run build",
@@ -82,7 +82,7 @@
       "active": true,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDBBRkY2QkVCMzBENkQwMkEKUldRcTBOWXc2MnYvQ3A4OVhzWEdWSndoSUN2Yk9FSzhhN0NxcHJRTGxvQ1FmakdSSmo5aVpCcXAK",
       "endpoints": [
-        "https://github.com/teaminsighter/productiviy-pro/releases/latest/download/latest.json"
+        "https://github.com/teaminsighter/productify-pro-releases/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"
