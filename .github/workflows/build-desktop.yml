@@ -228,6 +228,18 @@ jobs:
           cat latest.json
           echo "latest.json generated successfully"
 
+      - name: Collect release files
+        run: |
+          mkdir -p release-files
+          find artifacts -name "*.dmg" -exec cp {} release-files/ \;
+          find artifacts -name "*.msi" -exec cp {} release-files/ \;
+          find artifacts -name "*.deb" -exec cp {} release-files/ \;
+          find artifacts -name "*.AppImage" -exec cp {} release-files/ \;
+          find artifacts -name "*.tar.gz" -exec cp {} release-files/ \;
+          cp latest.json release-files/
+          echo "Files to upload:"
+          ls -la release-files/
+
       - name: Create Release on Public Releases Repo
         env:
           GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
@@ -249,9 +261,4 @@ jobs:
           - **Linux (AppImage)**: Productify.Pro_${VERSION}_amd64.AppImage
           - **Linux (Debian)**: Productify.Pro_${VERSION}_amd64.deb
           " \
-            artifacts/**/*.dmg \
-            artifacts/**/*.msi \
-            artifacts/**/*.deb \
-            artifacts/**/*.AppImage \
-            artifacts/**/*.tar.gz \
-            latest.json
+            release-files/*
