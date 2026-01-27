@@ -190,11 +190,12 @@ jobs:
           echo "  macOS Intel: $MAC_INTEL_FILE"
           echo "  Linux: $LINUX_FILE"
 
-          # URL encode filenames (replace spaces with %20)
-          WIN_FILE_URL=$(echo "$WIN_FILE" | sed 's/ /%20/g')
-          MAC_ARM_FILE_URL=$(echo "$MAC_ARM_FILE" | sed 's/ /%20/g')
-          MAC_INTEL_FILE_URL=$(echo "$MAC_INTEL_FILE" | sed 's/ /%20/g')
-          LINUX_FILE_URL=$(echo "$LINUX_FILE" | sed 's/ /%20/g')
+          # GitHub replaces spaces with periods in release asset names
+          # So we need to convert spaces to periods for the URLs
+          WIN_FILE_URL=$(echo "$WIN_FILE" | sed 's/ /./g')
+          MAC_ARM_FILE_URL=$(echo "$MAC_ARM_FILE" | sed 's/ /./g')
+          MAC_INTEL_FILE_URL=$(echo "$MAC_INTEL_FILE" | sed 's/ /./g')
+          LINUX_FILE_URL=$(echo "$LINUX_FILE" | sed 's/ /./g')
 
           # Create latest.json
           cat > latest.json << EOF
