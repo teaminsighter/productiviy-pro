@@ -229,29 +229,29 @@ jobs:
           echo "latest.json generated successfully"
 
       - name: Create Release on Public Releases Repo
-        uses: softprops/action-gh-release@v1
-        with:
-          repository: teaminsighter/productify-pro-releases
-          files: |
-            artifacts/**/*.dmg
-            artifacts/**/*.exe
-            artifacts/**/*.msi
-            artifacts/**/*.deb
-            artifacts/**/*.AppImage
-            artifacts/**/*.tar.gz
-            artifacts/**/*.sig
-            latest.json
-          generate_release_notes: true
-          body: |
-            ## Productify Pro v${{ steps.version.outputs.version }}
-
-            Download the installer for your platform below.
-
-            ### Downloads
-            - **macOS (Apple Silicon)**: `Productify.Pro_${{ steps.version.outputs.version }}_aarch64.dmg`
-            - **macOS (Intel)**: `Productify.Pro_${{ steps.version.outputs.version }}_x64.dmg`
-            - **Windows**: `Productify.Pro_${{ steps.version.outputs.version }}_x64_en-US.msi`
-            - **Linux (AppImage)**: `Productify.Pro_${{ steps.version.outputs.version }}_amd64.AppImage`
-            - **Linux (Debian)**: `Productify.Pro_${{ steps.version.outputs.version }}_amd64.deb`
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Create the release using gh CLI
+          gh release create "v${VERSION}" \
+            --repo teaminsighter/productify-pro-releases \
+            --title "Productify Pro v${VERSION}" \
+            --notes "## Productify Pro v${VERSION}
+
+          Download the installer for your platform below.
+
+          ### Downloads
+          - **macOS (Apple Silicon)**: Productify.Pro_${VERSION}_aarch64.dmg
+          - **macOS (Intel)**: Productify.Pro_${VERSION}_x64.dmg
+          - **Windows**: Productify.Pro_${VERSION}_x64_en-US.msi
+          - **Linux (AppImage)**: Productify.Pro_${VERSION}_amd64.AppImage
+          - **Linux (Debian)**: Productify.Pro_${VERSION}_amd64.deb
+          " \
+            artifacts/**/*.dmg \
+            artifacts/**/*.msi \
+            artifacts/**/*.deb \
+            artifacts/**/*.AppImage \
+            artifacts/**/*.tar.gz \
+            latest.json
