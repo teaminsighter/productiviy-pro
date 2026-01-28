@@ -4,14 +4,13 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Download as DownloadIcon, Apple, Monitor, Chrome, ArrowRight, ExternalLink } from 'lucide-react';
 
-// GitHub releases base URL - Update this to your actual repo
-const GITHUB_RELEASES_URL = 'https://github.com/teaminsighter/productiviy-pro/releases';
+// GitHub releases base URL - Public releases repo
+const GITHUB_RELEASES_URL = 'https://github.com/teaminsighter/productify-pro-releases/releases';
 const CHROME_WEBSTORE_URL = 'https://chrome.google.com/webstore/detail/productify-pro';
 
 type Platform = 'windows' | 'macos' | 'chrome' | 'unknown';
 
-const VERSION = '1.0.1';
-const APP_VERSION = '1.0.0'; // Version in tauri.conf.json
+const VERSION = '1.0.8';
 
 const platforms = [
   {
@@ -21,7 +20,7 @@ const platforms = [
     version: `v${VERSION}`,
     size: '15 MB',
     requirements: 'Windows 10 or later',
-    downloadUrl: `${GITHUB_RELEASES_URL}/download/v${VERSION}/Productify.Pro_${APP_VERSION}_x64_en-US.msi`,
+    downloadUrl: `${GITHUB_RELEASES_URL}/download/v${VERSION}/Productify.Pro_${VERSION}_x64_en-US.msi`,
     color: 'from-blue-500 to-cyan-500',
     steps: [
       'Download the installer',
@@ -37,7 +36,7 @@ const platforms = [
     version: `v${VERSION}`,
     size: '52 MB',
     requirements: 'macOS 11 Big Sur or later',
-    downloadUrl: `${GITHUB_RELEASES_URL}/download/v${VERSION}/Productify.Pro_${APP_VERSION}_aarch64.dmg`,
+    downloadUrl: `${GITHUB_RELEASES_URL}/download/v${VERSION}/Productify.Pro_${VERSION}_aarch64.dmg`,
     color: 'from-gray-500 to-gray-700',
     steps: [
       'Download the DMG file',
