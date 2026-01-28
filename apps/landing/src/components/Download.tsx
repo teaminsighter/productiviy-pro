@@ -10,7 +10,7 @@ const CHROME_WEBSTORE_URL = 'https://chrome.google.com/webstore/detail/productif
 
 type Platform = 'windows' | 'macos' | 'chrome' | 'unknown';
 
-const VERSION = '1.0.8';
+const VERSION = '1.0.9';
 
 const platforms = [
   {
@@ -34,7 +34,7 @@ const platforms = [
     name: 'macOS',
     icon: Apple,
     version: `v${VERSION}`,
-    size: '52 MB',
+    size: '16 MB',
     requirements: 'macOS 11 Big Sur or later',
     downloadUrl: `${GITHUB_RELEASES_URL}/download/v${VERSION}/Productify.Pro_${VERSION}_aarch64.dmg`,
     color: 'from-gray-500 to-gray-700',
