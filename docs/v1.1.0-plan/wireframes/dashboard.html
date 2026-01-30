@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Wireframe - Productify Pro</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Design Banner */
+        .design-banner {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: #000;
+            padding: 10px 20px;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 24px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Section */
+        .section {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+        }
+
+        /* Active Tracking - Main Grid */
+        .active-tracking-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .today-stats {
+            display: flex;
+            gap: 24px;
+        }
+
+        .today-stat {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .today-stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .today-stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .active-tracking-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        /* Sessions List (Left) */
+        .sessions-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .session-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .session-card.active {
+            border-color: rgba(34, 197, 94, 0.3);
+        }
+
+        .session-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .session-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #22c55e;
+            box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.inactive {
+            background: #666;
+            box-shadow: none;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .session-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .session-project {
+            font-size: 13px;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        .session-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .session-time {
+            font-size: 18px;
+            font-weight: 600;
+            color: #6366f1;
+            font-family: 'SF Mono', monospace;
+        }
+
+        .btn-toggle {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+
+        .btn-toggle:hover {
+            background: rgba(99, 102, 241, 0.3);
+            border-color: rgba(99, 102, 241, 0.5);
+        }
+
+        .btn-toggle.playing {
+            background: rgba(34, 197, 94, 0.2);
+            border-color: rgba(34, 197, 94, 0.5);
+        }
+
+        /* Monitor Icons */
+        .monitor-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .monitor-label {
+            font-size: 11px;
+            color: #666;
+        }
+
+        .monitor-icons {
+            display: flex;
+            gap: 6px;
+        }
+
+        .monitor-icon {
+            width: 14px;
+            height: 10px;
+            border-radius: 2px;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 7px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .monitor-icon.assigned {
+            background: rgba(34, 197, 94, 0.3);
+            border-color: rgba(34, 197, 94, 0.6);
+            color: #22c55e;
+        }
+
+        /* Monitor View Panel (Right) */
+        .monitor-panel {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        /* Monitor Tabs */
+        .monitor-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .monitor-tab {
+            flex: 1;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.03);
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .monitor-tab:hover {
+            background: rgba(255,255,255,0.06);
+        }
+
+        .monitor-tab.active {
+            background: rgba(99, 102, 241, 0.15);
+            border-color: rgba(99, 102, 241, 0.4);
+        }
+
+        .monitor-tab-icon {
+            font-size: 20px;
+            margin-bottom: 4px;
+        }
+
+        .monitor-tab-label {
+            font-size: 11px;
+            color: #888;
+        }
+
+        .monitor-tab-status {
+            font-size: 10px;
+            margin-top: 4px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            display: inline-block;
+        }
+
+        .monitor-tab-status.active {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+
+        .monitor-tab-status.idle {
+            background: rgba(102, 102, 102, 0.2);
+            color: #888;
+        }
+
+        /* NOW Box */
+        .now-box {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 12px;
+        }
+
+        .now-label {
+            font-size: 10px;
+            font-weight: 600;
+            color: #6366f1;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+
+        .now-app {
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .now-title {
+            font-size: 12px;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        .now-workspace {
+            font-size: 11px;
+            color: #6366f1;
+            margin-top: 6px;
+        }
+
+        /* Recent List */
+        .recent-section {
+            margin-top: 12px;
+        }
+
+        .recent-label {
+            font-size: 10px;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .recent-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .recent-item {
+            display: grid;
+            grid-template-columns: 80px 1fr 40px 20px;
+            align-items: center;
+            padding: 8px 10px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        .recent-app {
+            font-weight: 500;
+            color: #fff;
+        }
+
+        .recent-title {
+            color: #666;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .recent-time {
+            color: #666;
+            text-align: right;
+        }
+
+        .category-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-left: auto;
+        }
+
+        .category-dot.productive { background: #22c55e; }
+        .category-dot.neutral { background: #eab308; }
+        .category-dot.distracting { background: #ef4444; }
+
+        /* Workspaces Grid */
+        .workspaces-grid {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .workspace-card {
+            flex: 1;
+            min-width: 160px;
+            max-width: 220px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 12px 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .workspace-card:hover {
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        .workspace-card.active {
+            border-color: rgba(34, 197, 94, 0.4);
+        }
+
+        .workspace-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .workspace-icon {
+            font-size: 16px;
+        }
+
+        .workspace-name {
+            font-weight: 600;
+            color: #fff;
+            font-size: 13px;
+            flex: 1;
+        }
+
+        .workspace-status {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .workspace-status.active { background: #22c55e; }
+        .workspace-status.inactive { background: #666; }
+
+        .workspace-bottom {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .workspace-time {
+            font-size: 11px;
+            color: #888;
+        }
+
+        .workspace-monitors {
+            display: flex;
+            gap: 3px;
+        }
+
+        .workspace-add {
+            min-width: 80px;
+            max-width: 100px;
+            flex: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-style: dashed;
+            color: #666;
+            font-size: 12px;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        .stat-box {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .stat-box:hover {
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #888;
+        }
+
+        .stat-expand {
+            font-size: 10px;
+            color: #666;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .stat-sub {
+            font-size: 11px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        /* Team Section */
+        .team-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .team-link {
+            font-size: 12px;
+            color: #6366f1;
+            text-decoration: none;
+        }
+
+        .team-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .team-member {
+            display: grid;
+            grid-template-columns: 150px 100px 70px 70px;
+            align-items: center;
+            padding: 10px 12px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+        }
+
+        .member-name {
+            font-weight: 500;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .member-avatar {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .member-app, .member-time {
+            color: #888;
+            font-size: 12px;
+        }
+
+        .member-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+        }
+
+        .member-status.active { color: #22c55e; }
+        .member-status.idle { color: #eab308; }
+
+        .team-summary {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            font-size: 11px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <div class="design-banner">
+            DESIGN WIREFRAME - Dashboard with Multi-Monitor Support
+        </div>
+
+        <!-- Header -->
+        <div class="header">
+            <h1>Dashboard</h1>
+            <button class="btn-primary">+ Start Session</button>
+        </div>
+
+        <!-- Section 1: Active Tracking -->
+        <div class="section">
+            <div class="active-tracking-header">
+                <div class="section-title" style="margin-bottom: 0;">Active Tracking</div>
+                <div class="today-stats">
+                    <div class="today-stat">
+                        <span class="today-stat-label">Today:</span>
+                        <span class="today-stat-value">6h 47m</span>
+                    </div>
+                    <div class="today-stat">
+                        <span class="today-stat-label">Started:</span>
+                        <span class="today-stat-value">9:00 AM</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="active-tracking-grid">
+                <!-- Left: Sessions -->
+                <div class="sessions-panel">
+
+                    <!-- Session 1: Personal -->
+                    <div class="session-card active">
+                        <div class="session-header">
+                            <div class="session-info">
+                                <div class="status-dot"></div>
+                                <div>
+                                    <div class="session-name">Personal</div>
+                                    <div class="session-project">Side Project</div>
+                                </div>
+                            </div>
+                            <div class="session-right">
+                                <div class="session-time">02:34:15</div>
+                                <button class="btn-toggle playing">⏸</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Session 2: Acme Corp -->
+                    <div class="session-card active">
+                        <div class="session-header">
+                            <div class="session-info">
+                                <div class="status-dot"></div>
+                                <div>
+                                    <div class="session-name">Acme Corp</div>
+                                    <div class="session-project">Website Redesign</div>
+                                </div>
+                            </div>
+                            <div class="session-right">
+                                <div class="session-time">01:15:30</div>
+                                <button class="btn-toggle playing">⏸</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Session 3: Client B (not tracking) -->
+                    <div class="session-card">
+                        <div class="session-header">
+                            <div class="session-info">
+                                <div class="status-dot inactive"></div>
+                                <div>
+                                    <div class="session-name">Client B</div>
+                                    <div class="session-project">Mobile App</div>
+                                </div>
+                            </div>
+                            <div class="session-right">
+                                <div class="session-time" style="color: #666;">00:00:00</div>
+                                <button class="btn-toggle">▶</button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Right: Monitor View -->
+                <div class="monitor-panel">
+
+                    <!-- Monitor Tabs -->
+                    <div class="monitor-tabs">
+                        <div class="monitor-tab active">
+                            <div class="monitor-tab-icon">🖥️</div>
+                            <div class="monitor-tab-label">Monitor 1</div>
+                            <div class="monitor-tab-status active">Active</div>
+                        </div>
+                        <div class="monitor-tab">
+                            <div class="monitor-tab-icon">🖥️</div>
+                            <div class="monitor-tab-label">Monitor 2</div>
+                            <div class="monitor-tab-status active">Active</div>
+                        </div>
+                        <div class="monitor-tab">
+                            <div class="monitor-tab-icon">🖥️</div>
+                            <div class="monitor-tab-label">Monitor 3</div>
+                            <div class="monitor-tab-status idle">Idle</div>
+                        </div>
+                    </div>
+
+                    <!-- NOW Box -->
+                    <div class="now-box">
+                        <div class="now-label">Now (Monitor 1)</div>
+                        <div class="now-app">VS Code</div>
+                        <div class="now-title">monitoring/src/App.tsx</div>
+                        <div class="now-workspace">Personal → Side Project</div>
+                    </div>
+
+                    <!-- Recent List -->
+                    <div class="recent-section">
+                        <div class="recent-label">Recent (Monitor 1)</div>
+                        <div class="recent-list">
+                            <div class="recent-item">
+                                <span class="recent-app">Chrome</span>
+                                <span class="recent-title">GitHub PR #45</span>
+                                <span class="recent-time">8m</span>
+                                <span class="category-dot productive"></span>
+                            </div>
+                            <div class="recent-item">
+                                <span class="recent-app">Slack</span>
+                                <span class="recent-title">#dev-team</span>
+                                <span class="recent-time">5m</span>
+                                <span class="category-dot neutral"></span>
+                            </div>
+                            <div class="recent-item">
+                                <span class="recent-app">Figma</span>
+                                <span class="recent-title">Homepage Design</span>
+                                <span class="recent-time">3m</span>
+                                <span class="category-dot productive"></span>
+                            </div>
+                            <div class="recent-item">
+                                <span class="recent-app">Twitter</span>
+                                <span class="recent-title">twitter.com</span>
+                                <span class="recent-time">2m</span>
+                                <span class="category-dot distracting"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 2: Workspaces (moved up) -->
+        <div class="section">
+            <div class="section-title">Workspaces</div>
+            <div class="workspaces-grid">
+                <div class="workspace-card active">
+                    <div class="workspace-header">
+                        <span class="workspace-icon">🏠</span>
+                        <span class="workspace-name">Personal</span>
+                        <span class="workspace-status active"></span>
+                    </div>
+                    <div class="workspace-bottom">
+                        <div class="workspace-monitors">
+                            <div class="monitor-icon assigned">1</div>
+                            <div class="monitor-icon assigned">2</div>
+                            <div class="monitor-icon assigned">3</div>
+                        </div>
+                        <div class="workspace-time">4h 32m</div>
+                    </div>
+                </div>
+
+                <div class="workspace-card active">
+                    <div class="workspace-header">
+                        <span class="workspace-icon">🏢</span>
+                        <span class="workspace-name">Acme Corp</span>
+                        <span class="workspace-status active"></span>
+                    </div>
+                    <div class="workspace-bottom">
+                        <div class="workspace-monitors">
+                            <div class="monitor-icon assigned">1</div>
+                            <div class="monitor-icon assigned">2</div>
+                            <div class="monitor-icon">3</div>
+                        </div>
+                        <div class="workspace-time">2h 15m</div>
+                    </div>
+                </div>
+
+                <div class="workspace-card">
+                    <div class="workspace-header">
+                        <span class="workspace-icon">🏢</span>
+                        <span class="workspace-name">Client B</span>
+                        <span class="workspace-status inactive"></span>
+                    </div>
+                    <div class="workspace-bottom">
+                        <div class="workspace-monitors">
+                            <div class="monitor-icon">1</div>
+                            <div class="monitor-icon">2</div>
+                            <div class="monitor-icon assigned">3</div>
+                        </div>
+                        <div class="workspace-time">0h</div>
+                    </div>
+                </div>
+
+                <div class="workspace-card workspace-add">
+                    <span style="font-size: 20px;">+</span>
+                    <span style="margin-top: 2px;">New</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 3: Stats -->
+        <div class="section">
+            <div class="section-title">Stats</div>
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-header">
+                        <span class="stat-label">Time</span>
+                        <span class="stat-expand">▼</span>
+                    </div>
+                    <div class="stat-value">6h 47m</div>
+                    <div class="stat-sub">Today</div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-header">
+                        <span class="stat-label">Productive</span>
+                        <span class="stat-expand">▼</span>
+                    </div>
+                    <div class="stat-value">82%</div>
+                    <div class="stat-sub">Productivity</div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-header">
+                        <span class="stat-label">Goals</span>
+                        <span class="stat-expand">▼</span>
+                    </div>
+                    <div class="stat-value">3/5</div>
+                    <div class="stat-sub">Done Today</div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-header">
+                        <span class="stat-label">Streak</span>
+                        <span class="stat-expand">▼</span>
+                    </div>
+                    <div class="stat-value">12</div>
+                    <div class="stat-sub">Days</div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-header">
+                        <span class="stat-label">Distraction</span>
+                        <span class="stat-expand">▼</span>
+                    </div>
+                    <div class="stat-value">45m</div>
+                    <div class="stat-sub">11%</div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-header">
+                        <span class="stat-label">AFK</span>
+                        <span class="stat-expand">▼</span>
+                    </div>
+                    <div class="stat-value">32m</div>
+                    <div class="stat-sub">3 breaks</div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-header">
+                        <span class="stat-label">Top App</span>
+                        <span class="stat-expand">▼</span>
+                    </div>
+                    <div class="stat-value" style="font-size: 16px;">VS Code</div>
+                    <div class="stat-sub">3h 20m</div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-header">
+                        <span class="stat-label">Workspace</span>
+                        <span class="stat-expand">▼</span>
+                    </div>
+                    <div class="stat-value" style="font-size: 16px;">Personal</div>
+                    <div class="stat-sub">60%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 4: Team -->
+        <div class="section">
+            <div class="team-header">
+                <span class="section-title" style="margin-bottom: 0;">Team: Acme Corp</span>
+                <a href="#" class="team-link">Open Team →</a>
+            </div>
+            <div class="team-list">
+                <div class="team-member">
+                    <div class="member-name">
+                        <div class="member-avatar">J</div>
+                        <span>John (You)</span>
+                    </div>
+                    <span class="member-app">VS Code</span>
+                    <span class="member-time">2h 15m</span>
+                    <div class="member-status active">
+                        <div class="status-dot" style="width: 6px; height: 6px;"></div>
+                        Active
+                    </div>
+                </div>
+                <div class="team-member">
+                    <div class="member-name">
+                        <div class="member-avatar">S</div>
+                        <span>Sarah</span>
+                    </div>
+                    <span class="member-app">Figma</span>
+                    <span class="member-time">1h 45m</span>
+                    <div class="member-status active">
+                        <div class="status-dot" style="width: 6px; height: 6px;"></div>
+                        Active
+                    </div>
+                </div>
+                <div class="team-member">
+                    <div class="member-name">
+                        <div class="member-avatar">M</div>
+                        <span>Mike</span>
+                    </div>
+                    <span class="member-app">Chrome</span>
+                    <span class="member-time">3h 20m</span>
+                    <div class="member-status idle">
+                        <div class="status-dot" style="width: 6px; height: 6px; background: #eab308; box-shadow: none; animation: none;"></div>
+                        Idle
+                    </div>
+                </div>
+            </div>
+            <div class="team-summary">3 members • 2 online • 7h 20m total</div>
+        </div>
+
+    </div>
+</body>
+</html>
